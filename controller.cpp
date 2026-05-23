@@ -8,6 +8,7 @@
 
 int getBallDistance() {
   int strength = getBallStrength();
+  // Serial.println(strength);
   return ((strength) ? ReferenceDistance / getBallStrength() : ReferenceDistance);
 }
 
@@ -21,12 +22,37 @@ int getTangentAngle() {
 }
 
 void advancedCatch() {
-  while (getBallDistance() > BallCircleRadius) {
+  int distance = getBallDistance();
+  // Serial.println(distance);
+  while (distance > BallCircleRadius) {
     // driveAngle(getBallAngle() + getTangentAngle());
-    driveAngleWithRotation(getBallAngle() + getTangentAngle(), countAngularSpeed());
+    // if (getBallDistance() <= HoldBallRadius) {
+    //   holdBall();
+    // // }
+    // } 
+  Serial.println(distance);
+    if (distance != ReferenceDistance) {
+      int ballAngle = getBallAngle();
+      int tangentAngle = getTangentAngle();
+      int angleToDrive = ballAngle + tangentAngle;
+      int angularSpeed = countAngularSpeed();
+      driveAngleWithRotation(angleToDrive, angularSpeed);
+      Serial.print("Ball angle = ");
+      Serial.println(ballAngle);
+      Serial.print("Tangent angle = ");
+      Serial.println(tangentAngle);
+      // Serial.print("Drive angle = ");
+      // Serial.println(angleToDrive);
+      // Serial.print("Angular speed = ");
+      // Serial.println(angularSpeed);
+    } else {
+      drive(0, 0, 0, 0);
+    }
+    // delay(200);
+    distance = getBallDistance();
   }
   // holdBall();
-  driveAroundBall(200);
+  // driveAroundBall(200);
   // turnToBall();
 }
 
@@ -47,10 +73,10 @@ void debugTangent() {
 
 int countAngularSpeed() {
   static int lastError = 0;
-  int error = getBallAngle();
-  Serial.print("Angle = ");
-  Serial.println(error);
-  int delta = error * Kpa + (error - lastError) * Kda; 
+  int error = getBallAngle() ;
+  // Serial.print("Angle = ");
+  // Serial.println(error);
+  int delta = error * Kpa + (error - lastError) * Kda;
   lastError = error;
   return delta;
 }
@@ -70,7 +96,7 @@ void debugAngularSpeed() {
 }
 
 void score() {
-  while(!digitalRead(Key1));
+  while (!digitalRead(Key1));
   holdBall();
   delay(3000);
   turnByAngle(90, 40, 15.0, 2.5);

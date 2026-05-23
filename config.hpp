@@ -6,10 +6,10 @@ const int MotorLF1 = Motors[5];
 const int MotorLF2 = Motors[4];
 const int MotorLB1 = Motors[6];
 const int MotorLB2 = Motors[7];
-const int MotorRB1 = Motors[0];
-const int MotorRB2 = Motors[1];
-const int MotorRF1 = Motors[2];
-const int MotorRF2 = Motors[3];
+const int MotorRB1 = Motors[2];
+const int MotorRB2 = Motors[3];
+const int MotorRF1 = Motors[0];
+const int MotorRF2 = Motors[1];
 
 // UI
 const int Key1 = 37;

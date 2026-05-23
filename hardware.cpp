@@ -1,9 +1,15 @@
 #include <Arduino.h>
 #include "hardware.hpp"
 #include "config.hpp"
+#include <Wire.h>
 
 
 Servo Dribbler;
+
+void initWire() {
+  Wire.begin();
+  // Wire.beginTransmission(Seeker);
+}
 
 void initDribbler() {
   Dribbler.writeMicroseconds(1000);

@@ -7,3 +7,4 @@ void initKicker();
 void kick();
 void releaseBall();
 void testKick();
+void initWire();

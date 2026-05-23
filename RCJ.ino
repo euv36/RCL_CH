@@ -1,5 +1,4 @@
 #include "config.hpp"
-#include "seeker.hpp"
 #include "drive.hpp"
 #include "gyro.hpp"
 #include "locator.hpp"
@@ -48,7 +47,7 @@ void setup() {
 
 }
 
-void loop() {  
+void loop() {
   // Reading ball position
   // debugEnc();
   // testDrive();
@@ -62,9 +61,9 @@ void loop() {
   // searchBall();
   // followBall();
   // driveAroundBall(2000);
-  // debugDistance();'
+  // debugDistance();
   // debugTangent();
-  // advancedCatch();
+  advancedCatch();
   // printGyro();
   // testTurnAngle();
   // debugAngularSpeed();
@@ -77,5 +76,7 @@ void loop() {
   // testTurnAngle();
   // testAlignment();
   // testKick();
-  score();
+  // score();
+  // printLineAngle();
+  // rawTestDrive();
 }
