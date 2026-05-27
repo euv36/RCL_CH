@@ -22,7 +22,7 @@ def update_frame():
 def main_loop():
     global input_frame
 
-    while(True):
+    while True:
         update_frame()
         unikostyl.main_loop_frame(input_frame)
 
