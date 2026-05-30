@@ -7,14 +7,22 @@ constexpr float k = 1.0;
 Locator locator;
 
 int getBallAngle() {
-  int angle;
+  int angle = 0;
+  static int lastAngle = angle;
   if (getBallStrength() > 80) {
     // Serial.println("Ball is close, switching reading modes!");
     angle = 360 - (5 * locator.readAngleClose());
   } else {
     angle = 360 - (5 * locator.readAngle());
   }
-  return (angle > 180) ? angle - 360 : angle;
+  if (angle == -915) {
+    return lastAngle;
+  }
+  if (angle > 180) {
+    angle -= 360;
+  }
+  lastAngle = angle;
+  return angle;
 }
 
 int getBallStrength() {
@@ -46,7 +54,7 @@ void debugLocator() {
   while(1) {
     Serial.print("Angle = ");
     Serial.println(getBallAngle());
-    Serial.print("Distance = ");
+    Serial.print("Strength = ");
     Serial.println(getBallStrength());
     delay(200);
   }

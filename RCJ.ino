@@ -7,6 +7,7 @@
 #include "hardware.hpp"
 #include "drive.hpp"
 #include "controller.hpp"
+#include "gate.hpp"
 
 void setup() {
   // Initialize pins
@@ -22,7 +23,7 @@ void setup() {
   pinMode(EncA, INPUT_PULLUP);
   pinMode(EncB, INPUT_PULLUP);
   pinMode(EncKey, INPUT_PULLUP);
-  initWire();
+  // initWire();
   initKicker();
   // if (!locator.init()) {
   //   Serial.println("Locator isn't initilized!!!");
@@ -31,10 +32,11 @@ void setup() {
   // Serial.println((displayInit()) ? "ready" : "NOT ready");
   // Serial.println("Initializing gyro...");
   // rawTestDrive();
-  initGyro();
+  // initGyro();
   // Test motors
   initDribbler();
-  locator.init();
+  // locator.init();
+  setupGate();
   // attachInterrupt(digitalPinToInterrupt(EncA), readEnc, CHANGE);
   // attachInterrupt(digitalPinToInterrupt(EncB), readEnc, CHANGE);
   // kick();
@@ -63,7 +65,9 @@ void loop() {
   // driveAroundBall(2000);
   // debugDistance();
   // debugTangent();
-  advancedCatch();
+  // advancedCatch();
+  // getGateAngle();
+  driveToGate();
   // printGyro();
   // testTurnAngle();
   // debugAngularSpeed();

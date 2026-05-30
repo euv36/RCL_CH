@@ -5,6 +5,7 @@
 #include "controller.hpp"
 #include "hardware.hpp"
 #include "gyro.hpp"
+#include "gate.hpp"
 
 int getBallDistance() {
   int strength = getBallStrength();
@@ -41,10 +42,10 @@ void advancedCatch() {
       Serial.println(ballAngle);
       Serial.print("Tangent angle = ");
       Serial.println(tangentAngle);
-      // Serial.print("Drive angle = ");
-      // Serial.println(angleToDrive);
-      // Serial.print("Angular speed = ");
-      // Serial.println(angularSpeed);
+      Serial.print("Drive angle = ");
+      Serial.println(angleToDrive);
+      Serial.print("Angular speed = ");
+      Serial.println(angularSpeed);
     } else {
       drive(0, 0, 0, 0);
     }
@@ -73,12 +74,18 @@ void debugTangent() {
 
 int countAngularSpeed() {
   static int lastError = 0;
-  int error = getBallAngle() ;
+  int error = getBallAngle();
+  bool sign = error < 0;
+  error = abs(error);
   // Serial.print("Angle = ");
   // Serial.println(error);
   int delta = error * Kpa + (error - lastError) * Kda;
   lastError = error;
-  return delta;
+  if (sign) {
+    return -delta;
+  } else {
+    return delta;
+  }
 }
 
 void seekBall() {
@@ -101,4 +108,11 @@ void score() {
   delay(3000);
   turnByAngle(90, 40, 15.0, 2.5);
   kick();
+}
+
+void driveToGate() {
+  while (targetVariable > 20) {
+    drive(35, 35, -35, -35);
+  }
+  drive(0, 0, 0, 0);
 }

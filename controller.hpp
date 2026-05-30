@@ -1,10 +1,10 @@
 #pragma once
 
-constexpr int HoldBallRadius = 70;
-constexpr int BallCircleRadius = 30;
+constexpr int HoldBallRadius = 100;
+constexpr int BallCircleRadius = 60;
 constexpr int ReferenceDistance = 10000;
-constexpr float Kpa = 0.8;
-constexpr float Kda = 1;
+constexpr float Kpa = 0.5;
+constexpr float Kda = 0.5;
 
 int getBallDistance();
 int getTangentAngle();
@@ -15,3 +15,4 @@ int countAngularSpeed();
 void seekBall();
 void debugAngularSpeed();
 void score();
+void driveToGate();

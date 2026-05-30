@@ -1,6 +1,6 @@
 #pragma once
 
-const int BaseSpeed = 80;
+const int BaseSpeed = 100;
 
 void drive(int leftFront, int leftBack, int rightFront, int rightBack);
 void driveAngle(float angle, int bs = BaseSpeed);
