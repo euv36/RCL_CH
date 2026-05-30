@@ -355,6 +355,6 @@ def main_loop_frame(image_pixels: np.array):
     if widgets["img_src"].first_press and widgets["img_src"].selected_area:
         pygame.draw.rect(screen, (0, 255, 0), widgets["img_src"].selected_area, 2)
     pygame.display.update(); clock.tick(60)
-
+    return current_angle
 set_thr_to_sliders()
 update_all_widgets()

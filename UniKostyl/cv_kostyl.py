@@ -3,66 +3,73 @@ import cv2 as cv
 import numpy as np
 import zmq
 import time
+import sys
 
 def main_loop():
-    current_source = "0"
-    cap = None
-    zmq_socket = None
+    print("[SYSTEM] Инициализация сети и камеры...")
+
     zmq_context = zmq.Context()
 
-    print("Система захвата готова.")
+    # 1. Сокет для ПРИЕМА видео от Pi
+    video_sub = None
+
+    # 2. Сокет для ОТПРАВКИ угла на Pi (Publisher)
+    angle_pub = zmq_context.socket(zmq.PUB)
+    angle_pub.bind("tcp://*:5556") # Ноутбук открывает этот порт для Малины
+
+    cap = cv.VideoCapture(0)
+    current_source = "0"
+
+    print("[SYSTEM] Система готова. Ожидание команд...")
 
     while True:
         # ПРОВЕРКА СМЕНЫ ИСТОЧНИКА
         if unikostyl.requested_source is not None:
-            new_src = str(unikostyl.requested_source)
+            src = str(unikostyl.requested_source).strip()
             unikostyl.requested_source = None
 
-            # Закрываем всё старое
             if cap: cap.release(); cap = None
-            if zmq_socket: zmq_socket.close(); zmq_socket = None
+            if video_sub: video_sub.close(); video_sub = None
 
-            current_source = new_src
-            print(f"Переключение на: {current_source}")
-
-            # Если это URL или IP — считаем, что это ZMQ поток от Малины
-            if "http" in current_source or "." in current_source:
-                # Чистим адрес от http:// и портов, если ввели лишнее
-                ip = current_source.replace("http://", "").split(":")[0]
-                zmq_socket = zmq_context.socket(zmq.SUB)
-                zmq_socket.setsockopt_string(zmq.SUBSCRIBE, "")
-                zmq_socket.setsockopt(zmq.CONFLATE, 1) # Берем только самый свежий кадр
-                zmq_socket.connect(f"tcp://{ip}:5555")
-                print(f"Подключено к ZMQ потоку: {ip}:5555")
+            if "." in src: # Если ввели IP
+                video_sub = zmq_context.socket(zmq.SUB)
+                video_sub.setsockopt_string(zmq.SUBSCRIBE, "")
+                video_sub.setsockopt(zmq.CONFLATE, 1)
+                video_sub.connect(f"tcp://{src}:5555")
+                print(f"[SYSTEM] Подключено к видео Pi: {src}")
             else:
-                # Иначе это локальная камера
-                cap = cv.VideoCapture(int(current_source))
-                print(f"Открыта локальная камера: {current_source}")
+                cap = cv.VideoCapture(int(src))
 
         # ПОЛУЧЕНИЕ КАДРА
+               # ПОЛУЧЕНИЕ КАДРА
         frame_rgb = None
-
-        if zmq_socket:
+        if video_sub:
             try:
-                # Получаем байты из ZMQ (не блокируем поток надолго)
-                message = zmq_socket.recv(flags=zmq.NOBLOCK)
-                frame = cv.imdecode(np.frombuffer(message, dtype=np.uint8), cv.IMREAD_COLOR)
-                if frame is not None:
-                    frame_rgb = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
-            except zmq.Again:
-                pass # Кадр еще не прилетел
+                message = video_sub.recv(flags=zmq.NOBLOCK)
+                f = cv.imdecode(np.frombuffer(message, dtype=np.uint8), cv.IMREAD_COLOR)
+                if f is not None:
+                    # УДАЛИЛИ СТРОКУ С cv.rotate, так как Малина уже повернула кадр сама
 
-        elif cap:
-            ret, frame = cap.read()
+                    frame_rgb = cv.cvtColor(f, cv.COLOR_BGR2RGB)
+            except zmq.Again: pass
+        elif cap and cap.isOpened():
+            ret, f = cap.read()
             if ret:
-                frame_rgb = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
+                f = cv.rotate(f, cv.ROTATE_90_COUNTERCLOCKWISE)
+                frame_rgb = cv.cvtColor(f, cv.COLOR_BGR2RGB)
 
-        # ОТПРАВКА В ИНТЕРФЕЙС
-        if frame_rgb is not None:
-            unikostyl.main_loop_frame(frame_rgb)
-        else:
-            # Чтобы Pygame не зависал, если нет кадров, вызываем пустой цикл
-            unikostyl.main_loop_frame(None)
+
+        # ВЫЗОВ ИНТЕРФЕЙСА И ПОЛУЧЕНИЕ УГЛА
+        # Теперь unikostyl.main_loop_frame возвращает вычисленный угол
+        angle = unikostyl.main_loop_frame(frame_rgb)
+
+        # ОТПРАВКА УГЛА ОБРАТНО НА PI
+        if angle is not None and angle != -1:
+            print(f"--> ОТПРАВЛЯЮ УГОЛ: {angle}") # ДОБАВЬ ЭТУ СТРОКУ
+            angle_pub.send_string(str(angle))
+
+    if cap: cap.release()
+    angle_pub.close()
 
 if __name__ == "__main__":
     main_loop()
