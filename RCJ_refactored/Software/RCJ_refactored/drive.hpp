@@ -1,0 +1,11 @@
+#pragma once
+
+const int BaseSpeed = 80;
+
+void drive(int leftFront, int leftBack, int rightFront, int rightBack);
+void driveAngle(float angle, int bs = BaseSpeed);
+void testDrive();
+void testDriveAngle();
+void driveAngleWithRotation(int angle, int angularSpeed, int bs = BaseSpeed);
+void rawTestDrive();
+// void advancedCatch();
