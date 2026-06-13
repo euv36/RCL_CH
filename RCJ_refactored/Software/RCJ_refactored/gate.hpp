@@ -1,6 +1,7 @@
 #pragma once
 
-void setupRaspberry();
+void initRpi();
 int getGateAngle();
+void printGateAngle();
 void receiveEvent(int howMany);
 extern int gateAngle;

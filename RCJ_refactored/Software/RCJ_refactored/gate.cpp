@@ -1,63 +1,51 @@
-#include <Arduino.h>
-#include <Wire.h>
-#include "gate.hpp"
+// Используем порт Serial2 (пины 16 и 17 на Arduino Mega Pro)
+#include "Arduino.h"
 
-#define I2C_ADDRESS 0x64
+#define piSerial Serial2 
 
-#define RPI Serial1
+// int currentAngle = 0; // Переменная для постоянного хранения текущего угла
 
-// Целевая переменная, куда записывается каждое ИЗМЕНЕНИЕ данных
-int gateAgngle = 0;
-
-// Переменная для отслеживания предыдущего значения (для фильтрации повторов)
-int lastValue = -1;
-
-// Флаг для вывода логов в основной цикл (опционально)
-volatile bool newValueReceived = false;
-
-void setupRaspberry() {
-  // Serial.begin(115200);  // Скорость монитора порта
-  Wire.begin();
-  // Wire.setClock(400000);
-  Wire.onReceive(receiveEvent);
-  Serial.println("Arduino I2C Ready...");
+void initRpi() {
+  // Serial.begin(9600);   // Монитор порта компьютера для отладки
+  piSerial.begin(9600); // Связь с Raspberry Pi 4
+  Serial.println("Система готова. Ожидание углов от Raspberry Pi...");
 }
 
 int getGateAngle() {
-  // Если пришло новое УНИКАЛЬНОЕ значение, выводим его в консоль
-  // while (1) {
-    if (newValueReceived) {
-      Serial.print("Переменная обновлена! Новое значение: ");
-      Serial.println(gateAngle);
-
-      newValueReceived = false;  // Сбрасываем флаг
+  // Если от Raspberry Pi прилетел новый измененный угол
+  int gateAngle = 0;
+  static int lastGateAngle = gateAngle; 
+  if (piSerial.available() > 0) {
+    String inputData = piSerial.readStringUntil('\n');
+    int newAngle = inputData.toInt();
+    
+    // Обновляем глобальную переменную только новым значением
+    gateAngle = newAngle; 
+    Serial.print("-> ПОЛУЧЕН НОВЫЙ УГОЛ: ");
+    Serial.println(gateAngle);
+    if (gateAngle > 180) {
+      gateAngle -= 360;
     }
+    lastGateAngle = gateAngle;
     return gateAngle;
-  // }
+  } else {
+    return lastGateAngle;
+  }
+
+  // --- Тут ваша основная логика работы с углом ---
+  // Пример: непрерывная печать или управление сервоприводом.
+  // Так как Raspberry шлет данные только при изменениях, Arduino крутится 
+  // в loop со своим последним сохраненным значением 'currentAngle'
+  
+  /* 
+  Serial.print("Текущий рабочий угол системы: ");
+  Serial.println(currentAngle);
+  delay(100); 
+  */
 }
 
-// Обработчик прерывания I2C (вызывается при приеме данных)
-void receiveEvent(int howMany) {
-  // Нам должно прийти 3 байта: 1 байт регистра (0x00) + 2 байта данных.
-  // Если пришло меньше, значит пакет поврежден.
-  if (howMany < 3) {
-    // Очищаем буфер, если там что-то осталось
-    while (Wire.available()) Wire.read();
-    return;
-  }
-
-  byte reg = Wire.read();   // Пропускаем первый байт (виртуальный регистр 0x00)
-  byte high = Wire.read();  // Читаем старший байт
-  byte low = Wire.read();   // Читаем младший байт
-
-  // Собираем два байта обратно в одно целое число int
-  int receivedNumber = (high << 8) | low;
-
-  // Главное условие: проверяем на повтор
-  if (receivedNumber != lastValue) {
-    gateAngle = receivedNumber;  // Записываем в целевую переменную
-    lastValue = receivedNumber;       // Запоминаем для следующего сравнения
-    newValueReceived = true;          // Поднимаем флаг для loop()
-  }
-  // Если receivedNumber == lastValue, код просто проигнорирует его
+void printGateAngle() {
+  Serial.print("Gate angle = ");
+  Serial.println(getGateAngle());
+  delay(200);
 }

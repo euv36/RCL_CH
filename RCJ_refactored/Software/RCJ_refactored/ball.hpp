@@ -46,15 +46,37 @@ struct Locator {
 };
 
 extern Locator locator;
-extern bool isBallFound, isBallCatched;
-extern long long calmTime;
 
 
 constexpr int ReferenceDistance = 10000;
+constexpr int HoldBallRadius = 500;
+constexpr int BallCircleRadius = 300;
 
-int getBallAngle();
-int getBallStrength();
-void debugLocator();
-int getBallDistance();
-void checkBallCatched();
-void printIsBallCatched();
+
+
+struct Ball {
+private:
+  int angle = 0, rawAngle = 0, tangentAngle = 0, strength = 0, distance = ReferenceDistance;
+  bool found = false, catched = false;
+  long long calmTime;
+  void countAngle();
+  void countStrength();
+  void countDistance();
+  void countTangentAngle();
+  void checkIfCatched();
+
+public:
+  int getAngle();
+  int getStrength();
+  int getDistance();
+  int getRawAngle();
+  int getTangentAngle();
+  bool isCatched();
+  bool isFound();
+  bool isCalm();
+  void updateStatus();
+};
+
+extern Ball ball;
+
+void printInfo();

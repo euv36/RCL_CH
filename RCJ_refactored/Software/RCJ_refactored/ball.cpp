@@ -3,75 +3,133 @@
 #include "drive.hpp"
 #include "config.hpp"
 
-bool isBallFound = false;
-bool isBallCatched = false;
-
-long long calmTime = millis();
-
+Ball ball;
 
 Locator locator;
 
-int getBallAngle() {
-  int angle = 0;
-  static int lastAngle = angle;
-  if (getBallStrength() > 80) {
+/// Private methods
+
+void Ball::countAngle() {
+  int tmpAngle = 0;
+  static int lastAngle = tmpAngle;
+  static int lastRawAngle = rawAngle;
+  if (strength > 80) {
     // Serial.println("Ball is close, switching reading modes!");
-    angle = 360 - (5 * locator.readAngleClose());
+    tmpAngle = 360 - (5 * locator.readAngleClose());
   } else {
-    angle = 360 - (5 * locator.readAngle());
+    tmpAngle = 360 - (5 * locator.readAngle());
   }
-  if (angle == -915) {
-    isBallFound = false;
+  rawAngle = tmpAngle;
+  if (tmpAngle == -915) {
+    found = false;
     return lastAngle;
   } else {
-    isBallFound = true;
+    found = true;
   }
-  if (abs(angle - lastAngle) > 10) {
+  if (abs(rawAngle - lastRawAngle) > 10) {
     calmTime = millis();
   }
-  if (angle > 180) {
-    angle -= 360;
+  if (tmpAngle > 180) {
+    tmpAngle -= 360;
   }
+  angle = tmpAngle;
   lastAngle = angle;
-  return angle;
+  lastRawAngle = rawAngle;
 }
 
-int getBallStrength() {
-  int strength = locator.readStrength();
-  static int lastStrength = strength;
-  if (strength == 0) {
-    isBallFound = false;
+void Ball::countStrength() {
+  int tmpStrength = locator.readStrength();
+  static int lastStrength = tmpStrength;
+  if (tmpStrength == 0) {
+    found = false;
     return lastStrength;
   }
   else {
-    isBallFound = true;
+    found = true;
   }
+  strength = tmpStrength;
+}
+
+void Ball::countDistance() {
+  distance = ReferenceDistance / strength;
+}
+
+void Ball::countTangentAngle() {
+  tangentAngle = (asin(BallCircleRadius / (double)distance) / 0.017453);
+  if (angle > 0) {
+    tangentAngle = -tangentAngle;
+  }
+}
+
+void Ball::checkIfCatched() {
+  if (!digitalRead(Dribbler_magnet)) {
+    catched = true; 
+  } else if (abs(angle) > 10 || distance > 500) {
+    catched = false;
+  }
+}
+
+/// Public methods
+
+void Ball::updateStatus() {
+  countStrength();
+  countAngle();
+  countTangentAngle();
+  countDistance(); 
+  checkIfCatched();
+}
+
+int Ball::getDistance() {
+  return distance;
+}
+
+bool Ball::isCatched() {
+  return catched;
+}
+
+bool Ball::isFound() {
+  return found;
+} 
+
+int Ball::getAngle() {
+  return angle;
+}
+
+int Ball::getRawAngle() {
+  return rawAngle;
+}
+
+int Ball::getStrength() {
   return strength;
 }
 
-int getBallDistance() {
-  int strength = getBallStrength();
-  // Serial.println(strength);
-  return ((strength) ? ReferenceDistance / getBallStrength() : ReferenceDistance);
+int Ball::getTangentAngle() {
+  return tangentAngle;
 }
 
-void debugLocator() {
+bool Ball::isCalm () {
+  return (millis() - calmTime > 5000);
+}
+
+/// Debug functions
+
+void printInfo() {
   while (1) {
+    ball.updateStatus();
     Serial.print("Angle = ");
-    Serial.println(getBallAngle());
+    Serial.println(ball.getAngle());
     Serial.print("Strength = ");
-    Serial.println(getBallStrength());
-    delay(200);
+    Serial.println(ball.getStrength());
+    Serial.print("Distance = ");
+    Serial.println(ball.getDistance());
+    Serial.print("Tangent angle = ");
+    Serial.println(ball.getTangentAngle());
+    Serial.print("Found = ");
+    Serial.println((ball.isFound()) ? "found" : "NOT FOUND!");
+    Serial.print("Catched = ");
+    Serial.println((ball.isCatched()) ? "CATCHED!" : "not catched");
+    Serial.print("Calm = ");
+    Serial.println((ball.isCalm()) ? "CALM!\n" : "not calm\n");
+    delay(600);
   }
-}
-
-void checkBallCatched() {
-  isBallCatched = !digitalRead(Dribbler_magnet);
-}
-
-void printIsBallCatched() {
-  // while(1) {
-    checkBallCatched();
-    Serial.println(isBallCatched);
-  // }
 }

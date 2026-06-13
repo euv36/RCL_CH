@@ -15,3 +15,7 @@ void screenSaver();
 void printSens();
 int getLineAngle();
 void printLineAngle();
+
+struct Line {
+  
+};

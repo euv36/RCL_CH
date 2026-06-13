@@ -15,15 +15,22 @@ void initDribbler() {
   Dribbler.writeMicroseconds(1000);
   Dribbler.attach(Dribbler_pin, 1000, 2000);
   Dribbler.writeMicroseconds(1000);
-  // Dribbler.writeMicroseconds(2000);
-  // delay(5000);
-  // Dribbler.writeMicroseconds(1000);
-  // delay(10000);
-  // Dribbler.writeMicroseconds(1000);
+    // Dribbler.writeMicroseconds(2000);
+    // delay(5000);
+    // Dribbler.writeMicroseconds(1000);
+    // delay(10000);
+    // Dribbler.writeMicroseconds(1000);
 }
 
 void holdBall() {
-  Dribbler.writeMicroseconds(1300);
+  // Serial.println("Holding ball!");
+#ifdef FORWARD
+  Dribbler.writeMicroseconds(1275);
+#endif
+
+#ifdef GOALKEEPER
+  Dribbler.writeMicroseconds(1200);
+#endif
 }
 
 void releaseBall() {
@@ -39,12 +46,13 @@ void kick() {
   digitalWrite(Kicker, HIGH);
   delay(25);
   digitalWrite(Kicker, LOW);
+  delay(25);
 }
 
 void testKick() {
-  while(!digitalRead(Key1));
+  while (!digitalRead(Key1))
+    ;
   Serial.println("KICK!");
   delay(1000);
   kick();
 }
-

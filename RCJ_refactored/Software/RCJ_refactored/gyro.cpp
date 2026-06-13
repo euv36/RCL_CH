@@ -17,8 +17,15 @@ float ypr[3];         // [yaw, pitch, roll]   yaw/pitch/roll container and gravi
 bool initGyro() {
   // const int16_t accel_offset[3] = { -1764, 319, 803 };
   // const int16_t gyro_offset[3] = { 110, 6, 34 };
+#ifdef FORWARD
   const int16_t accel_offset[3] = { -2912, -1099, 1191 };
   const int16_t gyro_offset[3] = { -57, -17, 41 };
+#endif
+
+#ifdef GOALKEEPER
+  const int16_t accel_offset[3] = { -3546, -1358, 1165 };
+  const int16_t gyro_offset[3] = { -1516, -54, -28 };
+#endif
   // Wire.begin();
   // Wire.setClock(1000000UL);
   Serial.println("Gyro initializing...");
@@ -141,7 +148,7 @@ void testAlignment() {
   GyroAngle startAngle = getGyroAngle();
   float kg = 1.0;
   float offset = startAngle.rawValue();
-  while(1) {
+  while (1) {
     driveAngle((startAngle - getGyroAngle()).rawValue());
   }
 }
