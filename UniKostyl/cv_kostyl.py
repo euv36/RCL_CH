@@ -2,29 +2,26 @@ import unikostyl
 import cv2 as cv
 import numpy as np
 import zmq
-import time
-import sys
+import json
+import io
+from PIL import Image
 
 
 def main_loop():
-    print("[SYSTEM] Инициализация сети и камеры...")
+    print("[SYSTEM] Запуск сетевого узла ноутбука...")
 
     zmq_context = zmq.Context()
-
-    # 1. Сокет для ПРИЕМА видео от Pi
     video_sub = None
+    color_pub = zmq_context.socket(zmq.PUB)
+    color_pub.bind("tcp://*:5557")
 
-    # 2. Сокет для ОТПРАВКИ угла на Pi (Publisher)
-    angle_pub = zmq_context.socket(zmq.PUB)
-    angle_pub.bind("tcp://*:5556")  # Ноутбук открывает этот порт для Малины
-
-    cap = cv.VideoCapture(0)
-    current_source = "0"
-
-    print("[SYSTEM] Система готова. Ожидание команд...")
+    cap = cv.VideoCapture(0)  # локальная камера по умолчанию
+    print(
+        "[SYSTEM] Ноутбук готов. Введите IP Pi в поле 'Camera Source' и нажмите CONNECT."
+    )
 
     while True:
-        # ПРОВЕРКА СМЕНЫ ИСТОЧНИКА
+        # Смена источника по запросу из интерфейса
         if unikostyl.requested_source is not None:
             src = str(unikostyl.requested_source).strip()
             unikostyl.requested_source = None
@@ -36,7 +33,7 @@ def main_loop():
                 video_sub.close()
                 video_sub = None
 
-            if "." in src:  # Если ввели IP
+            if "." in src:  # IP Pi
                 video_sub = zmq_context.socket(zmq.SUB)
                 video_sub.setsockopt_string(zmq.SUBSCRIBE, "")
                 video_sub.setsockopt(zmq.CONFLATE, 1)
@@ -44,38 +41,46 @@ def main_loop():
                 print(f"[SYSTEM] Подключено к видео Pi: {src}")
             else:
                 cap = cv.VideoCapture(int(src))
+                print(f"[SYSTEM] Подключено к локальной камере: {src}")
 
-        # ПОЛУЧЕНИЕ КАДРА
-        # ПОЛУЧЕНИЕ КАДРА
+        # Получение кадра в RGB
         frame_rgb = None
         if video_sub:
             try:
-                message = video_sub.recv(flags=zmq.NOBLOCK)
-                f = cv.imdecode(np.frombuffer(message, dtype=np.uint8), cv.IMREAD_COLOR)
-                if f is not None:
-                    # УДАЛИЛИ СТРОКУ С cv.rotate, так как Малина уже повернула кадр сама
-
-                    frame_rgb = cv.cvtColor(f, cv.COLOR_BGR2RGB)
+                msg = video_sub.recv(flags=zmq.NOBLOCK)
+                # JPEG декодируем сразу в RGB через PIL – никаких BGR!
+                image = Image.open(io.BytesIO(msg))
+                frame_rgb = np.array(image.convert("RGB"))
+                # При необходимости можно повернуть:
+                # frame_rgb = np.rot90(frame_rgb, k=1)  # пример поворота на 90°
             except zmq.Again:
                 pass
+            except Exception as e:
+                print(f"[NET ERROR] {e}")
         elif cap and cap.isOpened():
             ret, f = cap.read()
             if ret:
                 f = cv.rotate(f, cv.ROTATE_90_COUNTERCLOCKWISE)
+                # Локальная веб-камера отдаёт BGR, конвертируем в RGB
                 frame_rgb = cv.cvtColor(f, cv.COLOR_BGR2RGB)
 
-        # ВЫЗОВ ИНТЕРФЕЙСА И ПОЛУЧЕНИЕ УГЛА
-        # Теперь unikostyl.main_loop_frame возвращает вычисленный угол
-        angle = unikostyl.main_loop_frame(frame_rgb)
+        # Запуск интерфейса (передаем чистый RGB кадр)
+        _, pending_rgb = unikostyl.main_loop_frame(frame_rgb)
 
-        # ОТПРАВКА УГЛА ОБРАТНО НА PI
-        if angle is not None and angle != -1:
-            print(f"--> ОТПРАВЛЯЮ УГОЛ: {angle}")  # ДОБАВЬ ЭТУ СТРОКУ
-            angle_pub.send_string(str(angle))
+        # Если нажали SAVE – отправляем RGB на Pi
+        if pending_rgb is not None:
+            # Приводим к обычным int на случай numpy типов
+            r, g, b = int(pending_rgb[0]), int(pending_rgb[1]), int(pending_rgb[2])
+            payload = json.dumps({"rgb": [r, g, b]})
+            color_pub.send_string(payload)
+            print(f"[NETWORK] --> Отправлен RGB: {payload}")
 
     if cap:
         cap.release()
-    angle_pub.close()
+    if video_sub:
+        video_sub.close()
+    color_pub.close()
+    zmq_context.term()
 
 
 if __name__ == "__main__":

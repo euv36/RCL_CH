@@ -1,14 +1,28 @@
-import cv2
-import zmq
-import numpy as np
-import time
-import threading
-import json
 import math
+import threading
+import time
+from picamera2 import Picamera2
+import cv2
+import json
+import numpy as np
+import serial  # --- ДЛЯ ARDUINO ---
+import zmq
 
-USE_USB = True
-USB_INDEX = 0
-LAPTOP_IP = "192.168.1.118"
+LAPTOP_IP = "10.248.106.77"
+
+# --- ИНИЦИАЛИЗАЦИЯ ARDUINO (Пины 8 и 10) ---
+SERIAL_PORT = "/dev/serial0"
+BAUD_RATE = 9600
+try:
+    ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=0.1)
+    print(f"[UART] Порт {SERIAL_PORT} успешно открыт.")
+    time.sleep(2)  # Пауза на инициализацию Arduino после открытия порта
+except Exception as e:
+    print(f"[UART ERROR] Не удалось открыть порт {SERIAL_PORT}: {e}")
+    ser = None
+
+# Переменная для хранения последнего отправленного угла
+last_sent_angle = -1
 
 context = zmq.Context()
 video_socket = context.socket(zmq.PUB)
@@ -103,40 +117,19 @@ def find_object_and_draw(frame_rgb, target_lab, tolerance=30):
     return angle, out_frame
 
 
-# --- КАМЕРА ---
-cap = None
-if USE_USB:
-    print("no 404")
-    cap = cv2.VideoCapture(USB_INDEX)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-    if not cap.isOpened():
-        print("404")
-        exit()
-else:
-    from picamera2 import Picamera2
-
-    picam2 = Picamera2()
-    config = picam2.create_video_configuration(
-        main={"size": (640, 480), "format": "RGB888"}, controls={"FrameRate": 30}
-    )
-    picam2.configure(config)
-    picam2.start()
+# --- ИНИЦИАЛИЗАЦИЯ PICAMERA2 ---
+picam2 = Picamera2()
+config = picam2.create_video_configuration(
+    main={"size": (640, 480), "format": "RGB888"}, controls={"FrameRate": 30}
+)
+picam2.configure(config)
+picam2.start()
 
 print("wait rgb")
 
 try:
     while True:
-        if USE_USB:
-            ret, frame_bgr = cap.read()
-            if not ret:
-                continue
-            frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-        else:
-            frame_rgb = picam2.capture_array()
-
-        # При необходимости повернуть кадр (если ноутбук ожидает определённую ориентацию)
-        # frame_rgb = cv2.rotate(frame_rgb, cv2.ROTATE_90_CLOCKWISE)
+        frame_rgb = picam2.capture_array()
 
         if tracking_enabled and target_rgb is not None:
             if target_lab is None:
@@ -145,13 +138,26 @@ try:
             angle, frame_with_contours = find_object_and_draw(
                 frame_rgb, target_lab, tolerance=30
             )
+
+            # --- ДЛЯ ARDUINO: Проверка изменения угла ---
             if angle != -1:
-                print(f"[ANGLE] {angle}°")
+                if angle != last_sent_angle:
+                    print(f"[ANGLE] Угол изменился: {angle}° -> Отправка")
+                    if ser and ser.is_open:
+                        try:
+                            # Отправляем новый угол текстовой строкой с \n в конце
+                            ser.write(f"{angle}\n".encode("utf-8"))
+                            last_sent_angle = angle
+                        except Exception as e:
+                            print(f"[UART WRITE ERROR] {e}")
+                else:
+                    # Угол такой же, как в прошлый раз — ничего не шлем
+                    pass
             frame_to_send = frame_with_contours
         else:
             frame_to_send = frame_rgb
 
-        # Отправляем кадр (с контурами или без) на ноутбук
+        # Отправляем кадр на ноутбук
         frame_bgr_to_send = cv2.cvtColor(frame_to_send, cv2.COLOR_RGB2BGR)
         _, buffer = cv2.imencode(
             ".jpg", frame_bgr_to_send, [cv2.IMWRITE_JPEG_QUALITY, 50]
@@ -161,10 +167,11 @@ try:
 except KeyboardInterrupt:
     print("\n[INFO] Завершение по Ctrl+C...")
 finally:
-    if USE_USB and cap:
-        cap.release()
-    elif not USE_USB and "picam2" in locals():
+    if "picam2" in locals():
         picam2.stop()
+    if ser and ser.is_open:
+        ser.close()
+        print("[UART] Порт закрыт.")
     video_socket.close()
     rgb_socket.close()
     context.term()
