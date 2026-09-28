@@ -6,14 +6,12 @@ import time
 import threading
 import json
 import math
-import io
 import serial
 import sys
 from picamera2 import Picamera2
-from PIL import Image
 
 # ===================== НАСТРОЙКИ =====================
-LAPTOP_IP = "192.168.0.159"
+LAPTOP_IP = "172.17.1.25"
 VIDEO_PORT = 5555  # порт, куда отправляем видео с выделением
 RGB_PORT = 5557  # порт, откуда принимаем RGB-пиксель
 
@@ -31,7 +29,7 @@ KERNEL_SIZE = 5
 KERNEL = np.ones((KERNEL_SIZE, KERNEL_SIZE), np.uint8)
 
 SERIAL_PORT = "/dev/serial0"
-SERIAL_BAUD = 115200
+SERIAL_BAUD = 115200  # должен совпадать с Arduino Serial2
 ANGLE_CHANGE_THRESHOLD = 3  # отправлять только если изменился на >=3°
 MIN_SEND_INTERVAL = 0.05  # не чаще 50 мс
 HEARTBEAT_INTERVAL = 0.5  # период heartbeat, если угол не меняется
@@ -167,9 +165,9 @@ def rgb_listener():
 
 
 # ===================== ОБРАБОТКА КАДРА =====================
-def compute_object_info(frame_rgb):
+def compute_object_info(frame):
     global obj_cx, obj_cy, obj_angle, obj_area
-    cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2HSV, dst=hsv_buf)
+    cv2.cvtColor(frame, cv2.COLOR_RGB2HSV, dst=hsv_buf)
     cv2.inRange(hsv_buf, LOWER_B, UPPER_B, dst=mask_buf)
 
     non_zero = cv2.countNonZero(mask_buf)
@@ -200,7 +198,7 @@ def init_camera():
     try:
         picam2 = Picamera2()
         config = picam2.create_video_configuration(
-            main={"size": (Z_SIZE, Z_SIZE), "format": "RGB888"},
+            main={"size": (Z_SIZE, Z_SIZE), "format": "BGR888"},
             controls={"FrameRate": FPS},
         )
         crop_left = (X_RES - CROP_SENSE_SIZE) // 2
@@ -215,7 +213,7 @@ def init_camera():
         picam2.start()
         picam2.set_controls(
             {
-                "ExposureValue": -1.5,
+                "ExposureValue": 0,
                 "AeMeteringMode": 1,
                 "NoiseReductionMode": 2,
                 "Sharpness": 3.0,
@@ -254,31 +252,16 @@ def main():
 
     try:
         while True:
-            frame_rgb = picam2.capture_array()
-            frame_rgb = cv2.filter2D(frame_rgb, -1, sharpen_kernel)
+            frame = picam2.capture_array()
+            frame = cv2.filter2D(frame, -1, sharpen_kernel)
 
             if tracking_event.is_set():
-                found = compute_object_info(frame_rgb)
+                found = compute_object_info(frame)
                 if found:
-                    # ===== РИСОВАНИЕ КОНТУРА (вместо круга и линии) =====
-                    # Находим контуры на маске объекта
                     contours, _ = cv2.findContours(
                         mask_buf, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
                     )
-                    cv2.drawContours(
-                        frame_rgb, contours, -1, (0, 255, 0), 2
-                    )  # зелёный контур толщиной 2
-                    # Дополнительно выводим угол рядом с центром объекта
-                    cv2.putText(
-                        frame_rgb,
-                        f"{obj_angle} deg",
-                        (obj_cx + 10, obj_cy - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.8,
-                        (255, 255, 255),
-                        2,
-                    )
-                    # =======================================================
+                    cv2.drawContours(frame, contours, -1, (0, 255, 0), 2)
 
                     now = time.time()
                     if (
@@ -286,28 +269,31 @@ def main():
                         or abs(obj_angle - last_sent_angle) >= ANGLE_CHANGE_THRESHOLD
                         and (now - last_send_time) >= MIN_SEND_INTERVAL
                     ):
-                        if safe_serial_write(f"{obj_angle}\n".encode()):
+                        payload = f"{obj_angle},{int(obj_area)}\n".encode()
+                        if safe_serial_write(payload):
                             last_sent_angle = obj_angle
                             last_send_time = now
-                            log(f"Отправлен угол: {obj_angle}°")
+                            log(f"TX: {payload!r}")
             else:
                 if time.time() - no_rgb_log_time > 5:
                     log("Ожидание RGB...")
                     no_rgb_log_time = time.time()
 
-            # Heartbeat
             now = time.time()
             if (now - last_send_time) >= HEARTBEAT_INTERVAL:
                 if safe_serial_write(b"HB\n"):
                     last_send_time = now
 
-            # ===== ОТПРАВКА ВИДЕО С ВЫДЕЛЕНИЕМ НА НОУТБУК =====
             if video_socket is not None:
                 try:
-                    img = Image.fromarray(frame_rgb)
-                    buf = io.BytesIO()
-                    img.save(buf, format="JPEG", quality=JPEG_QUALITY)
-                    video_socket.send(buf.getvalue(), flags=zmq.NOBLOCK, copy=False)
+                    frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+                    ok, jpeg = cv2.imencode(
+                        ".jpg",
+                        frame_bgr,
+                        [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY],
+                    )
+                    if ok:
+                        video_socket.send(jpeg.tobytes(), flags=zmq.NOBLOCK, copy=False)
                 except Exception as e:
                     log(f"Ошибка отправки видео: {e}", "WARN")
                     video_socket = None
