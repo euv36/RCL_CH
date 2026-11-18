@@ -16,8 +16,8 @@ target_link_libraries(camera_vision PUBLIC camera_common)
 target_include_directories(camera_vision PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/vision ${CMAKE_CURRENT_SOURCE_DIR})
 
 if(CAMERA_CPP_HAS_OPENCV)
-add_library(camera_vision_cv STATIC vision/self_mask.cpp)
-target_link_libraries(camera_vision_cv PUBLIC camera_warnings ${OpenCV_LIBS})
+add_library(camera_vision_cv STATIC vision/self_mask.cpp vision/tracking.cpp vision/calibration.cpp)
+target_link_libraries(camera_vision_cv PUBLIC camera_warnings camera_vision ${OpenCV_LIBS})
 target_include_directories(camera_vision_cv PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/vision ${CMAKE_CURRENT_SOURCE_DIR} ${OpenCV_INCLUDE_DIRS})
 endif()
 
@@ -48,6 +48,10 @@ if(CAMERA_CPP_HAS_OPENCV)
 add_executable(kCameraCppSelfMaskTest ../tests/vision/self_mask_test.cpp)
 target_link_libraries(kCameraCppSelfMaskTest PRIVATE camera_vision_cv)
 add_test(NAME self_mask COMMAND kCameraCppSelfMaskTest)
+
+add_executable(kCameraCppTrackingTest ../tests/vision/tracking_test.cpp)
+target_link_libraries(kCameraCppTrackingTest PRIVATE camera_vision_cv)
+add_test(NAME tracking COMMAND kCameraCppTrackingTest)
 endif()
 
 add_executable(kCameraCppParityRunner ../tests/parity/parity_runner.cpp)
