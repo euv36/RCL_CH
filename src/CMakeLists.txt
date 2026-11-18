@@ -3,6 +3,9 @@ add_library(camera_common STATIC
   common/json_config.cpp
   common/paths.cpp
   common/logging.cpp
+  common/gate_store.cpp
+  common/field_map.cpp
+  common/cam_settings_config.cpp
 )
 target_link_libraries(camera_common PUBLIC camera_warnings)
 target_include_directories(camera_common PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/common ${CMAKE_SOURCE_DIR}/third_party)
@@ -31,6 +34,18 @@ add_test(NAME atomic_file COMMAND kCameraCppAtomicFileTest)
 add_executable(kCameraCppJsonConfigTest ../tests/common/json_config_test.cpp)
 target_link_libraries(kCameraCppJsonConfigTest PRIVATE camera_common)
 add_test(NAME json_config COMMAND kCameraCppJsonConfigTest)
+
+add_executable(kCameraCppGateStoreTest ../tests/common/gate_store_test.cpp)
+target_link_libraries(kCameraCppGateStoreTest PRIVATE camera_common)
+add_test(NAME gate_store COMMAND kCameraCppGateStoreTest)
+
+add_executable(kCameraCppFieldMapTest ../tests/common/field_map_test.cpp)
+target_link_libraries(kCameraCppFieldMapTest PRIVATE camera_common)
+add_test(NAME field_map COMMAND kCameraCppFieldMapTest)
+
+add_executable(kCameraCppCamSettingsConfigTest ../tests/common/cam_settings_config_test.cpp)
+target_link_libraries(kCameraCppCamSettingsConfigTest PRIVATE camera_common)
+add_test(NAME cam_settings_config COMMAND kCameraCppCamSettingsConfigTest)
 
 add_executable(kCameraCppHsvColorTest ../tests/vision/hsv_color_test.cpp)
 target_link_libraries(kCameraCppHsvColorTest PRIVATE camera_vision)
