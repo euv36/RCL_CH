@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# POSIX/WSL venv in the repo root (bin/ layout, Python 3.10) — see AGENTS.md
+.venv/
+
+# VS Code
+.vscode/
+
+# C++ build dirs (pi_core/robot_core are built on the Pi or into out/)
+UniKostyl/robot_core/build/
+UniKostyl/pi_core/build/
+UniKostyl/pi_core/build-win/
+*.pdb
+*.exe
+*.o
+
+# Local binary archives not suitable for GitHub
+camera.rar
+camera_*.rar
+
+# Runtime scratch / previews
+UniKostyl/out/*_tmp/
+UniKostyl/out/*.tmp.*
+camera_*.zip

@@ -64,13 +64,41 @@ class ImageNumpy(Widget):
         self.select = select_area
         self.selected_area = None
         self.first_press = None
+        # Оптимизация FPS: персистентные поверхности + array_to_surface.
+        # Прежний путь make_surface + transform.scale делал ДВЕ полнокадровые
+        # копии на каждый кадр (~19 мс на 720x1280): make_surface с astype и
+        # аллокацией + scale с новой аллокацией. Теперь — прямой покадровый
+        # запис пикселей в переиспользуемый Surface (без astype/аллокаций)
+        # и scale в переиспользуемый dest.
+        self._src_surf = None   # Surface размера источника (h, w)
+        self._disp_surf = None  # Surface размера виджета
 
     def draw(self):
-        self.image = pygame.transform.scale(
-            pygame.surfarray.make_surface(self.pixels),
-            (self.rect.width, self.rect.height),
-        )
-        self.screen.blit(self.image, self.rect.topleft)
+        src = self.pixels
+        if src is not None and hasattr(src, "shape") and src.ndim == 3:
+            sw, sh = src.shape[1], src.shape[0]
+            if self._src_surf is None or self._src_surf.get_size() != (sw, sh):
+                self._src_surf = pygame.Surface((sw, sh))
+            try:
+                # Прямая запись пикселей (вью (w, h, 3) без копии массива).
+                pygame.pixelcopy.array_to_surface(
+                    self._src_surf, src.transpose(1, 0, 2)
+                )
+            except (ValueError, TypeError):
+                # Фолбэк на старый путь (другой dtype/компоновка).
+                self._src_surf = pygame.surfarray.make_surface(src)
+        if self._src_surf is not None:
+            if (self._disp_surf is None or
+                    self._disp_surf.get_size() != (self.rect.width,
+                                                   self.rect.height)):
+                self._disp_surf = pygame.Surface(
+                    (self.rect.width, self.rect.height)
+                )
+            pygame.transform.scale(
+                self._src_surf, (self.rect.width, self.rect.height),
+                self._disp_surf,
+            )
+            self.screen.blit(self._disp_surf, self.rect.topleft)
 
         # if self.first_press is not None:
         #    pygame.draw.rect(self.screen, (100, 100, 200, 100), self.selected_area)
@@ -115,7 +143,7 @@ class Label(Widget):
         rect,
         text,
         font=None,
-        color=(0, 0, 0),
+        color=(235, 240, 246),
         stratch=True,
         block_click=True,
     ):
@@ -154,7 +182,11 @@ class Button(Widget):
         func=None,
         args=(),
         kwargs={},
-        colors={"normal": (0, 0, 0)},
+        colors={
+            "normal": (40, 54, 78),
+            "hover": (54, 74, 108),
+            "pressed": (26, 36, 54),
+        },
         block_click=True,
     ):
         super().__init__(screen, rect, block_click)
@@ -164,24 +196,36 @@ class Button(Widget):
         self.kwargs = kwargs
         self.colors = colors
         self.state = "normal"
+        self.hover = False
 
     def draw(self):
-        clr = self.colors.get(self.state)
-        if clr is None:
-            clr = (0, 0, 0)
-        pygame.draw.rect(self.screen, clr, self.rect)
+        state = "pressed" if self.is_pressed else ("hover" if self.hover else "normal")
+        clr = self.colors.get(state, self.colors.get("normal", (40, 54, 78)))
+        pygame.draw.rect(self.screen, clr, self.rect, border_radius=7)
+        pygame.draw.rect(self.screen, (92, 114, 148), self.rect, 1, border_radius=7)
         if self.label is not None:
             self.label.draw()
 
+    def process_mousemotion(self, event):
+        self.hover = self.in_rect(event.pos)
+        self.mouse_inside = self.hover
+
     def process_mousedown(self, event):
         if not super().process_mousedown(event):
+            self.is_pressed = False
+            self.hover = False
             return False
+        self.is_pressed = True
+        self.hover = True
         self.state = "pressed"
         self.func(*self.args, *self.kwargs)
         return True
 
     def process_mouseup(self, event):
         self.state = "normal"
+        self.is_pressed = False
+        if hasattr(event, "pos"):
+            self.hover = self.in_rect(event.pos)
 
 
 class HorizSlider(Widget):
