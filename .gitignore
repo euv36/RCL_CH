@@ -1,0 +1,17 @@
+build*/
+local/
+out/
+*.user
+.vscode/
+.idea/
+*.swp
+.pio/
+saved_gates.json
+camera_settings.json
+field_map.json
+distance_calib.json
+*.pem
+*.key
+id_ed25519*
+rpi_native_optimization_ed25519*
+secrets*
