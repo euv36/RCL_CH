@@ -1,7 +1,6 @@
+﻿#include "../test_checks.hpp"
 #include "atomic_file.hpp"
 #include "json_config.hpp"
-
-#include <cassert>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -21,33 +20,33 @@ int main() {
 
     std::string warning;
     auto loaded = read_json_file(path, &warning);
-    assert(loaded);
-    assert(loaded->at("keep") == "yes");
-    assert(warning.empty());
+    CAMERA_TEST_CHECK(loaded);
+    CAMERA_TEST_CHECK(loaded->at("keep") == "yes");
+    CAMERA_TEST_CHECK(warning.empty());
 
     loaded->at("owned") = 2;
     std::string error;
-    assert(atomic_write_text(path, loaded->dump(2), &error));
+    CAMERA_TEST_CHECK(atomic_write_text(path, loaded->dump(2), &error));
 
     auto rewritten = read_json_file(path, &warning);
-    assert(rewritten);
-    assert(rewritten->at("keep") == "yes");
-    assert(rewritten->at("owned") == 2);
+    CAMERA_TEST_CHECK(rewritten);
+    CAMERA_TEST_CHECK(rewritten->at("keep") == "yes");
+    CAMERA_TEST_CHECK(rewritten->at("owned") == 2);
 
     std::ofstream(path, std::ios::trunc) << "{not-json";
     auto corrupt = read_json_file(path, &warning);
-    assert(!corrupt);
-    assert(!warning.empty());
+    CAMERA_TEST_CHECK(!corrupt);
+    CAMERA_TEST_CHECK(!warning.empty());
 
     std::ofstream(path, std::ios::trunc);
     auto empty = read_json_file(path, &warning);
-    assert(!empty);
-    assert(!warning.empty());
+    CAMERA_TEST_CHECK(!empty);
+    CAMERA_TEST_CHECK(!warning.empty());
 
     std::filesystem::remove(path);
     auto missing = read_json_file(path, &warning);
-    assert(!missing);
-    assert(!warning.empty());
+    CAMERA_TEST_CHECK(!missing);
+    CAMERA_TEST_CHECK(!warning.empty());
     std::cout << "json_config_test passed\n";
     return 0;
 }
