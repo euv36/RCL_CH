@@ -35,6 +35,18 @@ add_executable(kCameraCppJsonConfigTest ../tests/common/json_config_test.cpp)
 target_link_libraries(kCameraCppJsonConfigTest PRIVATE camera_common)
 add_test(NAME json_config COMMAND kCameraCppJsonConfigTest)
 
+if(CAMERA_CPP_HAS_OPENCV)
+add_executable(kCameraCppCaptureConfigTest ../tests/pi_camera/capture_config_test.cpp)
+add_library(camera_pi_camera STATIC
+  pi_camera/v4l2_capture.cpp
+  pi_camera/camera_engine.cpp
+)
+target_link_libraries(camera_pi_camera PUBLIC camera_vision_cv ${OpenCV_LIBS} camera_warnings)
+target_include_directories(camera_pi_camera PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/pi_camera ${CMAKE_CURRENT_SOURCE_DIR} ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(kCameraCppCaptureConfigTest PRIVATE camera_pi_camera)
+add_test(NAME capture_config COMMAND kCameraCppCaptureConfigTest)
+endif()
+
 add_executable(kCameraCppGateStoreTest ../tests/common/gate_store_test.cpp)
 target_link_libraries(kCameraCppGateStoreTest PRIVATE camera_common)
 add_test(NAME gate_store COMMAND kCameraCppGateStoreTest)
