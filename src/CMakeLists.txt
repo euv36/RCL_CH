@@ -8,11 +8,18 @@ target_link_libraries(camera_common PUBLIC camera_warnings)
 target_include_directories(camera_common PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/common ${CMAKE_SOURCE_DIR}/third_party)
 
 add_library(camera_vision STATIC
+  vision/distance.cpp
   vision/hsv_color.cpp
   vision/gate_cluster.cpp
 )
 target_link_libraries(camera_vision PUBLIC camera_common)
 target_include_directories(camera_vision PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/vision ${CMAKE_CURRENT_SOURCE_DIR})
+
+if(CAMERA_CPP_HAS_OPENCV)
+add_library(camera_vision_cv STATIC vision/self_mask.cpp)
+target_link_libraries(camera_vision_cv PUBLIC camera_warnings ${OpenCV_LIBS})
+target_include_directories(camera_vision_cv PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/vision ${CMAKE_CURRENT_SOURCE_DIR} ${OpenCV_INCLUDE_DIRS})
+endif()
 
 add_executable(kCameraCppSmoke common/smoke.cpp)
 target_link_libraries(kCameraCppSmoke PRIVATE camera_warnings)
@@ -32,6 +39,16 @@ add_test(NAME hsv_color COMMAND kCameraCppHsvColorTest)
 add_executable(kCameraCppGateClusterTest ../tests/vision/gate_cluster_test.cpp)
 target_link_libraries(kCameraCppGateClusterTest PRIVATE camera_vision)
 add_test(NAME gate_cluster COMMAND kCameraCppGateClusterTest)
+
+add_executable(kCameraCppDistanceTest ../tests/vision/distance_test.cpp)
+target_link_libraries(kCameraCppDistanceTest PRIVATE camera_vision)
+add_test(NAME distance COMMAND kCameraCppDistanceTest)
+
+if(CAMERA_CPP_HAS_OPENCV)
+add_executable(kCameraCppSelfMaskTest ../tests/vision/self_mask_test.cpp)
+target_link_libraries(kCameraCppSelfMaskTest PRIVATE camera_vision_cv)
+add_test(NAME self_mask COMMAND kCameraCppSelfMaskTest)
+endif()
 
 add_executable(kCameraCppParityRunner ../tests/parity/parity_runner.cpp)
 target_link_libraries(kCameraCppParityRunner PRIVATE camera_vision)
