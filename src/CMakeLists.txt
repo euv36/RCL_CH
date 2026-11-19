@@ -128,3 +128,33 @@ add_test(NAME cluster_parity COMMAND kCameraCppClusterParity)
 add_executable(kCameraCppSmokeTest ../tests/common/smoke_test.cpp)
 target_link_libraries(kCameraCppSmokeTest PRIVATE camera_warnings)
 add_test(NAME common_smoke COMMAND kCameraCppSmokeTest)
+
+add_library(camera_laptop_core STATIC
+  laptop/state.cpp
+  laptop/source_controller.cpp
+  laptop/clipboard_text.cpp
+)
+target_include_directories(camera_laptop_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/laptop ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(camera_laptop_core PUBLIC camera_warnings)
+
+add_executable(kCameraCppClipboardTest ../tests/laptop/clipboard_test.cpp)
+target_link_libraries(kCameraCppClipboardTest PRIVATE camera_laptop_core)
+add_test(NAME clipboard COMMAND kCameraCppClipboardTest)
+
+add_executable(kCameraCppSourceControllerTest ../tests/laptop/source_controller_test.cpp)
+target_link_libraries(kCameraCppSourceControllerTest PRIVATE camera_laptop_core)
+add_test(NAME source_controller COMMAND kCameraCppSourceControllerTest)
+
+if(CAMERA_CPP_HAS_LAPTOP_DEPS AND TARGET camera_imgui)
+  add_executable(camera_laptop_ui
+    laptop/main.cpp
+    laptop/app.cpp
+    laptop/widgets.cpp
+    laptop/clipboard.cpp
+  )
+  target_link_libraries(camera_laptop_ui PRIVATE camera_laptop_core camera_imgui)
+  target_include_directories(camera_laptop_ui PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/laptop
+    ${SDL2_INCLUDE_DIRS}
+  )
+endif()
