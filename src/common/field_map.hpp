@@ -10,12 +10,12 @@
 namespace camera_cpp {
 
 struct FieldObservationInput {
-    int gate_id = 0;
+    int slot = -1;
     bool enabled = false;
     bool found = false;
-    float angle_deg = 0.0F;
+    float angle = 0.0F;
     float dist_cm = 0.0F;
-    bool reliable = false;
+    bool held = false;
 };
 
 struct FieldBindResult {
@@ -25,6 +25,7 @@ struct FieldBindResult {
 
 struct EstimatedDirection {
     float angle_deg = 0.0F;
+    float dist_cm = 0.0F;
     bool estimated = true;
 };
 
@@ -41,9 +42,6 @@ public:
     std::map<int, EstimatedDirection> estimated_directions(float heading_delta_deg) const;
 
 private:
-    float field_width_cm_;
-    float gate_width_cm_;
-    float gate_height_cm_;
     std::filesystem::path path_;
     nlohmann::json root_;
 };

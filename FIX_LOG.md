@@ -187,3 +187,34 @@ $env:Path = 'C:\msys64\mingw64\bin;C:\msys64\usr\bin;' + $env:Path
 & 'C:\msys64\mingw64\bin\ctest.exe' --test-dir build-msys2 -R gate_store --output-on-failure
 ```
 Результат: `gate_store` Passed (1/1, 0.20 sec). Полный набор после интеграции: 18/18 Passed (2.44 sec). `[VERIFIED]`
+
+---
+
+## Task 2 — Field map: соответствие контракту и расчёт направлений
+
+**Баг / корневая причина**
+- `FieldMap` писал неконтрактные поля `field_width_cm`, `gate_width_cm`, `gate_height_cm` с масштабом в 100 раз больше legacy.
+- `load()` всегда возвращал успех и принимал неверную версию; `bind_from_results()` писал `heading_delta_deg`, `enabled`, `found` и `estimated: true`, не нормализуя углы и дистанции.
+- `estimated_directions()` добавлял смещениеHeading вместо вычитания и возвращал -180..180 вместо 0..360.
+
+**Изменённые файлы**
+- `src/common/field_map.cpp`
+- `src/common/field_map.hpp`
+- `tests/common/field_map_test.cpp`
+- `FIX_LOG.md`
+
+**Исправление / оптимизация**
+- Использован контракт `version`, `bound_at`, `robot_pos`, `heading_offset_deg`, `gates`, `boundary`; неизвестные ключи и `boundary` сохраняются.
+- `load()` отклоняет отсутствующий, повреждённый и не-v1 JSON, нормализует записи ворот.
+- `bind_from_results()` берёт слот +1, только `enabled && found`, нормализует угол в 0..360, дистанцию — в `null` при неположительном/нечисловом значении и до 500 см; `estimated` берётся из `held`.
+- `estimated_directions()` вычитает смещениеHeading, отклоняет нечисловые значения и возвращает 0..360 вместе с `dist_cm`.
+- Обновлён тест: для смещения +10 ожидается направление 5, а не 25.
+
+**Проверка**
+```powershell
+$env:Path = 'C:\msys64\mingw64\bin;C:\msys64\usr\bin;' + $env:Path
+& 'C:\msys64\mingw64\bin\cmake.exe' -S . -B build-msys2
+& 'C:\msys64\mingw64\bin\cmake.exe' --build build-msys2
+& 'C:\msys64\mingw64\bin\ctest.exe' --test-dir build-msys2 -R field_map --output-on-failure
+```
+Результат: `field_map` Passed (1/1, 0.41 sec). `[VERIFIED]`
