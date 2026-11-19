@@ -47,6 +47,35 @@ target_link_libraries(kCameraCppCaptureConfigTest PRIVATE camera_pi_camera)
 add_test(NAME capture_config COMMAND kCameraCppCaptureConfigTest)
 endif()
 
+add_library(camera_pi_logic STATIC
+  pi_camera/status_builder.cpp
+  pi_camera/cam_settings.cpp
+)
+target_link_libraries(camera_pi_logic PUBLIC camera_common)
+target_include_directories(camera_pi_logic PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/pi_camera ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/common ${CMAKE_SOURCE_DIR}/third_party)
+
+add_executable(kCameraCppStatusBuilderTest ../tests/pi_camera/status_builder_test.cpp)
+target_link_libraries(kCameraCppStatusBuilderTest PRIVATE camera_pi_logic)
+add_test(NAME status_builder COMMAND kCameraCppStatusBuilderTest)
+
+add_executable(kCameraCppCamSettingsTest ../tests/pi_camera/cam_settings_test.cpp)
+target_link_libraries(kCameraCppCamSettingsTest PRIVATE camera_pi_logic)
+add_test(NAME cam_settings COMMAND kCameraCppCamSettingsTest)
+
+if(CAMERA_CPP_HAS_ZMQ)
+add_library(camera_pi_zmq STATIC
+  pi_camera/color_listener.cpp
+)
+target_link_libraries(camera_pi_zmq PUBLIC camera_pi_logic camera_common ${ZMQ_LIBRARIES} zmq)
+target_include_directories(camera_pi_zmq PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/pi_camera ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/common ${CMAKE_SOURCE_DIR}/third_party ${ZMQ_INCLUDE_DIRS} ${ZMQ_INCLUDE_DIR})
+endif()
+
+if(CAMERA_CPP_HAS_OPENCV AND CAMERA_CPP_HAS_ZMQ)
+add_executable(camera_service pi_camera/service_main.cpp)
+target_link_libraries(camera_service PRIVATE camera_pi_camera camera_pi_zmq camera_pi_logic camera_common ${OpenCV_LIBS} ${ZMQ_LIBRARIES} zmq)
+target_include_directories(camera_service PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/common ${CMAKE_CURRENT_SOURCE_DIR}/pi_camera ${CMAKE_SOURCE_DIR}/third_party ${OpenCV_INCLUDE_DIRS} ${ZMQ_INCLUDE_DIRS} ${ZMQ_INCLUDE_DIR})
+endif()
+
 add_executable(kCameraCppGateStoreTest ../tests/common/gate_store_test.cpp)
 target_link_libraries(kCameraCppGateStoreTest PRIVATE camera_common)
 add_test(NAME gate_store COMMAND kCameraCppGateStoreTest)
