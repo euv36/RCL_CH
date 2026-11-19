@@ -17,7 +17,7 @@ struct EngineFrame {
 class CameraEngine {
 public:
     explicit CameraEngine(std::unique_ptr<CaptureBackend> backend = make_open_cv_v4l2_backend());
-    bool open(const CaptureConfig& config = {});
+    bool open(const CaptureConfig& config = {}, CaptureOpenReport* report = nullptr);
     std::optional<EngineFrame> read();
     void close();
 

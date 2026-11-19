@@ -332,3 +332,38 @@ cmake --build build-msys2
 ctest --test-dir build-msys2 -R cam_settings --output-on-failure
 ```
 Результат: после добавления проверок тест упал на `report.controls.at("gamma").status == "unconfirmed"` (строка 57); после исправления `cam_settings` Passed, `cam_settings_config` Passed (2/2, 0.20 sec). `[VERIFIED]`
+
+---
+
+## Task 10 — Проверка согласованных параметров V4L2
+
+**Баг / корневая причина**
+- Драйверу отправлялись запрошенные FOURCC, размер и FPS, но фактические согласованные параметры не считывались. Код мог сообщить об успехе, даже если камера работала в другом формате или размере.
+- Предупреждение о не-MJPG выводилось даже когда камера действительно согласовала MJPG.
+- Ошибки нормализации конфигурации и чтения свойств молча терялись.
+
+**Изменённые файлы**
+- `src/pi_camera/v4l2_capture.hpp`
+- `src/pi_camera/v4l2_capture.cpp`
+- `src/pi_camera/camera_engine.hpp`
+- `src/pi_camera/camera_engine.cpp`
+- `tests/pi_camera/capture_config_test.cpp`
+- `FIX_LOG.md`
+
+**Исправление / оптимизация**
+- Добавлен контракт `CaptureBackend::properties()` и структура `CaptureProperties`; backend обязан вернуть реальные width, height, FPS и FOURCC.
+- `V4l2Capture::open()` теперь принимает `CaptureOpenReport`, проверяет согласованные параметры и возвращает честную ошибку, если properties недоступны.
+- `V4l2Capture::negotiated_config()` и `EngineFrame::negotiated` хранят фактические значения, а не запрошенные.
+- FOURCC устанавливается до size/FPS; некорректный FOURCC отклоняется.
+- При несовпадении размера или формата выдаётся явное предупреждение; отсутствие FPS фиксируется в warning с подстановкой запрошенного значения.
+- Полный кадр остаётся без crop; downscale до 640x360 выполняется через `cv::resize(..., INTER_AREA)`.
+- Тесты fake backend проверяют успешный readback, не-MJPG, negotiated 1280x720, отсутствие property contract и нулевой FPS.
+
+**Проверка**
+```powershell
+$env:Path = 'C:\msys64\mingw64\bin;C:\msys64\usr\bin;' + $env:Path
+& 'C:\msys64\mingw64\bin\cmake.exe' -S . -B build-msys2
+& 'C:\msys64\mingw64\bin\cmake.exe' --build build-msys2 --target kCameraCppCaptureConfigTest
+& 'C:\msys64\mingw64\bin\ctest.exe' --test-dir build-msys2 -R capture --output-on-failure
+```
+Результат: configure OK, build OK, `capture_config` Passed (1/1, 0.22 sec). Полная сборка готовилась параллельно с незавершённым Task 11, поэтому финальный полный прогон после завершения Task 11 обязателен. `[VERIFIED TARGETED]`

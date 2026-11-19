@@ -7,11 +7,13 @@ namespace camera_cpp {
 CameraEngine::CameraEngine(std::unique_ptr<CaptureBackend> backend)
     : capture_(std::move(backend)) {}
 
-bool CameraEngine::open(const CaptureConfig& config) {
-    if (!capture_.open(config)) {
+bool CameraEngine::open(const CaptureConfig& config, CaptureOpenReport* report) {
+    if (!capture_.open(config, report)) {
+        negotiated_ = CaptureConfig{};
         return false;
     }
-    negotiated_ = config;
+    // Report the values the device actually negotiated, not the requested ones.
+    negotiated_ = capture_.negotiated_config();
     return true;
 }
 
@@ -30,6 +32,7 @@ std::optional<EngineFrame> CameraEngine::read() {
 
 void CameraEngine::close() {
     capture_.close();
+    negotiated_ = CaptureConfig{};
 }
 
 } // namespace camera_cpp
