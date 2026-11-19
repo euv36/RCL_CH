@@ -191,6 +191,17 @@ target_link_libraries(kCameraCppPreviewSupportTest PRIVATE camera_laptop_preview
 add_test(NAME preview_support COMMAND kCameraCppPreviewSupportTest)
 endif()
 
+if(CAMERA_CPP_HAS_OPENCV AND CAMERA_CPP_HAS_ZMQ)
+add_library(camera_laptop_video STATIC laptop/pi_video_client.cpp)
+target_link_libraries(camera_laptop_video PUBLIC camera_warnings ${OpenCV_LIBS} ${ZMQ_LIBRARIES})
+target_include_directories(camera_laptop_video PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
+  ${OpenCV_INCLUDE_DIRS} ${ZMQ_INCLUDE_DIRS} ${ZMQ_INCLUDE_DIR})
+
+add_executable(kCameraCppPiVideoClientTest ../tests/laptop/pi_video_client_test.cpp)
+target_link_libraries(kCameraCppPiVideoClientTest PRIVATE camera_laptop_video)
+add_test(NAME pi_video_client COMMAND kCameraCppPiVideoClientTest)
+endif()
+
 add_executable(kCameraCppLayoutSmokeTest ../tests/laptop/layout_smoke_test.cpp)
 target_link_libraries(kCameraCppLayoutSmokeTest PRIVATE camera_laptop_core)
 add_test(NAME layout_smoke COMMAND kCameraCppLayoutSmokeTest)
