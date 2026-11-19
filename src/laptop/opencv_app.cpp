@@ -291,6 +291,19 @@ void OpenCVApp::refresh_tracking() {
     track_results_ = tracker_.track(input);
     for (int i = 0; i < 3; ++i) gate_masks_[i] = track_results_[i].mask;
 
+    // Радар питается результатами трекинга, чтобы работать и без Pi.
+    for (int i = 0; i < 3; ++i) {
+        RadarGate& radar = state_.radar_gates[i];
+        radar.id = i + 1;
+        radar.enabled = state_.gate_enabled[i];
+        radar.found = track_results_[i].found && radar.enabled;
+        if (track_results_[i].found) {
+            radar.angle_deg = track_results_[i].angle_deg;
+            radar.distance_cm = track_results_[i].dist_cm;
+        }
+        radar.rgb = state_.gate_colors[i];
+    }
+
     processed_frame_ = portrait_frame_.clone();
     for (const auto& result : track_results_) {
         if (!result.found || result.bbox.width <= 0) continue;
@@ -478,9 +491,14 @@ void OpenCVApp::render_main() {
         cv::cvtColor(gray, left_view, cv::COLOR_GRAY2RGB);
     }
 
+    cv::Mat left_bgr;
+    cv::Mat right_bgr;
+    if (!left_view.empty()) cv::cvtColor(left_view, left_bgr, cv::COLOR_RGB2BGR);
+    if (!processed_frame_.empty()) cv::cvtColor(processed_frame_, right_bgr, cv::COLOR_RGB2BGR);
+
     const auto areas = preview_areas();
     for (std::size_t i = 0; i < areas.size(); ++i) {
-        const cv::Mat& image = i == 0 ? left_view : processed_frame_;
+        const cv::Mat& image = i == 0 ? left_bgr : right_bgr;
         cv::rectangle(canvas_, {areas[i].x, areas[i].y},
                       {areas[i].x + areas[i].w, areas[i].y + areas[i].h},
                       cv::Scalar(80, 80, 80), 1);
