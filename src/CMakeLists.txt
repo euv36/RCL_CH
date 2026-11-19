@@ -199,6 +199,15 @@ add_executable(kCameraCppHsvPanelTest ../tests/laptop/hsv_panel_test.cpp)
 target_link_libraries(kCameraCppHsvPanelTest PRIVATE camera_laptop_hsv)
 add_test(NAME hsv_panel COMMAND kCameraCppHsvPanelTest)
 
+add_library(camera_laptop_widgets STATIC laptop/cv_widgets.cpp)
+target_link_libraries(camera_laptop_widgets PUBLIC camera_warnings camera_laptop_core ${OpenCV_LIBS})
+target_include_directories(camera_laptop_widgets PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
+  ${OpenCV_INCLUDE_DIRS})
+
+add_executable(kCameraCppCvWidgetsTest ../tests/laptop/cv_widgets_test.cpp)
+target_link_libraries(kCameraCppCvWidgetsTest PRIVATE camera_laptop_widgets)
+add_test(NAME cv_widgets COMMAND kCameraCppCvWidgetsTest)
+
 add_library(camera_laptop_preview STATIC laptop/preview_support.cpp)
 target_link_libraries(camera_laptop_preview PUBLIC camera_laptop_core ${OpenCV_LIBS})
 target_include_directories(camera_laptop_preview PUBLIC ${OpenCV_INCLUDE_DIRS})
