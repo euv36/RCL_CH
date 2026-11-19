@@ -158,3 +158,32 @@ Result: configure OK, build OK, `100% tests passed out of 18`. `[VERIFIED]`
 git diff --check
 ```
 Результат: ошибок нет. Поиск по `docs/spec.md` и `docs/implementation_plan.md` не нашёл `camera_cpp_cpp`, `вЂ`, `В°`, `в†’`, `В±`. `[VERIFIED]`
+
+---
+
+## Task 2 — Store выбранных ворот: строгая проверка legacy-контракта
+
+**Баг / корневая причина**
+- `GateStore::load()` принимал любую версию JSON, материализовал все три слота и превращал повреждённый `rgb` в белый цвет.
+- `gate()` возвращал запись для отсутствующих ворот; `role: unset` записывался в файл вместо удаления ключа.
+- `upsert()` не сохранял `ts` и `lab`, поэтому native-контракт расходился с legacy `gate_store.py`.
+
+**Изменённые файлы**
+- `src/common/gate_store.cpp`
+- `src/common/gate_store.hpp`
+- `tests/common/gate_store_test.cpp`
+- `FIX_LOG.md`
+
+**Исправление / оптимизация**
+- Загрузка требует целочисленную `version == 1`, отбрасывает повреждённые `rgb`/`lab`, сохраняет неизвестные ключи и не создаёт пустые слоты.
+- `rgb` должен содержать ровно три числа 0..255; `lab` — шесть чисел в диапазонах legacy-контракта, иначе `null`.
+- `gate()` возвращает `nullopt` для отсутствующих ворот; роль `unset` удаляет ключ.
+- `upsert()` записывает локальную ISO-метку времени, nullable `lab` и сохраняет неизвестные поля.
+- `save()` записывает только реально существующие слоты 1..3.
+
+**Проверка**
+```powershell
+$env:Path = 'C:\msys64\mingw64\bin;C:\msys64\usr\bin;' + $env:Path
+& 'C:\msys64\mingw64\bin\ctest.exe' --test-dir build-msys2 -R gate_store --output-on-failure
+```
+Результат: `gate_store` Passed (1/1, 0.20 sec). Полный набор после интеграции: 18/18 Passed (2.44 sec). `[VERIFIED]`
