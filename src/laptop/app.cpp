@@ -58,6 +58,10 @@ int App::run() {
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    // Шрифт по умолчанию не содержит кириллицу; INFO и подписи панелей русские.
+    ImFontConfig font_config;
+    font_config.GlyphRanges = io.Fonts->GetGlyphRangesCyrillic();
+    io.Fonts->AddFontDefault(&font_config);
     apply_dark_theme();
     ImGui_ImplSDL2_InitForOpenGL(window, gl_context);
     ImGui_ImplOpenGL3_Init("#version 120");
@@ -75,6 +79,9 @@ int App::run() {
             }
             if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_RESIZED) {
                 glViewport(0, 0, event.window.data1, event.window.data2);
+            }
+            if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE) {
+                state.show_help = false;
             }
             if (is_paste_shortcut(event, state)) {
                 paste_into_source(state);

@@ -133,6 +133,11 @@ add_library(camera_laptop_core STATIC
   laptop/state.cpp
   laptop/source_controller.cpp
   laptop/clipboard_text.cpp
+  laptop/panels.cpp
+  laptop/help_ru.cpp
+  laptop/radar_panel.cpp
+  laptop/cam_settings_panel.cpp
+  laptop/theme.cpp
 )
 target_include_directories(camera_laptop_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/laptop ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(camera_laptop_core PUBLIC camera_warnings)
@@ -145,6 +150,36 @@ add_executable(kCameraCppSourceControllerTest ../tests/laptop/source_controller_
 target_link_libraries(kCameraCppSourceControllerTest PRIVATE camera_laptop_core)
 add_test(NAME source_controller COMMAND kCameraCppSourceControllerTest)
 
+add_executable(kCameraCppHelpRuTest ../tests/laptop/help_ru_test.cpp)
+target_link_libraries(kCameraCppHelpRuTest PRIVATE camera_laptop_core)
+add_test(NAME help_ru COMMAND kCameraCppHelpRuTest)
+
+if(CAMERA_CPP_HAS_OPENCV)
+add_library(camera_laptop_hsv STATIC laptop/hsv_panel.cpp)
+target_link_libraries(camera_laptop_hsv PUBLIC camera_laptop_core ${OpenCV_LIBS})
+target_include_directories(camera_laptop_hsv PUBLIC ${OpenCV_INCLUDE_DIRS})
+
+add_executable(kCameraCppHsvPanelTest ../tests/laptop/hsv_panel_test.cpp)
+target_link_libraries(kCameraCppHsvPanelTest PRIVATE camera_laptop_hsv)
+add_test(NAME hsv_panel COMMAND kCameraCppHsvPanelTest)
+endif()
+
+add_executable(kCameraCppLayoutSmokeTest ../tests/laptop/layout_smoke_test.cpp)
+target_link_libraries(kCameraCppLayoutSmokeTest PRIVATE camera_laptop_core)
+add_test(NAME layout_smoke COMMAND kCameraCppLayoutSmokeTest)
+
+add_executable(kCameraCppRadarPanelTest ../tests/laptop/radar_panel_test.cpp)
+target_link_libraries(kCameraCppRadarPanelTest PRIVATE camera_laptop_core)
+add_test(NAME radar_panel COMMAND kCameraCppRadarPanelTest)
+
+add_executable(kCameraCppCamSettingsPanelTest ../tests/laptop/cam_settings_panel_test.cpp)
+target_link_libraries(kCameraCppCamSettingsPanelTest PRIVATE camera_laptop_core)
+add_test(NAME cam_settings_panel COMMAND kCameraCppCamSettingsPanelTest)
+
+add_executable(kCameraCppThemeTest ../tests/laptop/theme_test.cpp)
+target_link_libraries(kCameraCppThemeTest PRIVATE camera_laptop_core)
+add_test(NAME theme COMMAND kCameraCppThemeTest)
+
 if(CAMERA_CPP_HAS_LAPTOP_DEPS AND TARGET camera_imgui)
   add_executable(camera_laptop_ui
     laptop/main.cpp
@@ -152,9 +187,14 @@ if(CAMERA_CPP_HAS_LAPTOP_DEPS AND TARGET camera_imgui)
     laptop/widgets.cpp
     laptop/clipboard.cpp
   )
-  target_link_libraries(camera_laptop_ui PRIVATE camera_laptop_core camera_imgui)
+  target_link_libraries(camera_laptop_ui PRIVATE camera_laptop_core camera_common camera_imgui)
   target_include_directories(camera_laptop_ui PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/laptop
     ${SDL2_INCLUDE_DIRS}
   )
+  if(CAMERA_CPP_HAS_ZMQ)
+    target_compile_definitions(camera_laptop_ui PRIVATE CAMERA_CPP_HAS_ZMQ=1)
+    target_include_directories(camera_laptop_ui PRIVATE ${ZMQ_INCLUDE_DIRS})
+    target_link_libraries(camera_laptop_ui PRIVATE ${ZMQ_LIBRARIES})
+  endif()
 endif()

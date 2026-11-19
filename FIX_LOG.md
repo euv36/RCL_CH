@@ -443,3 +443,53 @@ $env:Path = 'C:\msys64\mingw64\bin;C:\msys64\usr\bin;' + $env:Path
 & 'C:\msys64\mingw64\bin\ctest.exe' --test-dir build-msys2 --output-on-failure
 ```
 Результат: сборка 100%, `tracking` Passed (1/1, 1.41 sec), полный набор `100% tests passed out of 19`, 12.98 sec. `[VERIFIED]`
+
+---
+
+## Task 14 — Панели native UI и живое управление (паритет с legacy)
+
+**Баг / корневая причина**
+- После Task 13 каркас SDL2/ImGui имел только CONNECT и Ctrl+V; отсутствовали панели INFO, HSV MASK, RADAR, CAM SET, GATES/SAVE, привязка к полю и пресет POS — интерфейс не соответствовал legacy.
+- Не было проверки, что невключённые ворота не рисуются в радаре: stale-записи с `enabled=false` могли бы показать себя как активные.
+- CAM SET мог выдумывать подтверждение «Pi подтвердил», хотя ZMQ PUB не даёт ACK; требовался правдивый статус.
+- INFO на английском и без всех обязательных названий элементов управления не проходил приёмку.
+- HSV-маска должна быть выровнена 1:1 с портретным кадром 720x1280; требовался чистый builder без привязки к GUI.
+
+**Изменённые файлы**
+- `src/laptop/panels.hpp/.cpp` (новый)
+- `src/laptop/help_ru.hpp/.cpp` (новый)
+- `src/laptop/hsv_panel.hpp/.cpp` (новый)
+- `src/laptop/radar_panel.hpp/.cpp` (новый)
+- `src/laptop/cam_settings_panel.hpp/.cpp` (новый)
+- `src/laptop/theme.hpp/.cpp` (новый)
+- `src/laptop/state.hpp/.cpp`
+- `src/laptop/widgets.hpp/.cpp`
+- `src/laptop/app.cpp`
+- `src/CMakeLists.txt`
+- `tests/laptop/help_ru_test.cpp` (новый)
+- `tests/laptop/hsv_panel_test.cpp` (новый)
+- `tests/laptop/layout_smoke_test.cpp` (новый)
+- `tests/laptop/radar_panel_test.cpp` (новый)
+- `tests/laptop/cam_settings_panel_test.cpp` (новый)
+- `tests/laptop/theme_test.cpp` (новый)
+- `FIX_LOG.md`
+
+**Исправление / оптимизация**
+- `HelpRu::sections()` отдаёт семь русских секций (`main`, `gates`, `radar`, `camera`, `hsv`, `field`, `status`) со всеми обязательными токенами: `Ctrl+V`, `CAM SET`, `RADAR`, `BIND FIELD`, `POS`, `HSV MASK`, `INFO`, `SAVE G1`, `GATES`, `exposure`, `brightness`. INFO открывается модальным окном по кнопке, закрывается по ESC.
+- Чистый `build_hsv_mask_bgra()` повторяет oracle `hsv_view.py`: RGB→HSV→BGR, для каждой ненулевой маски совпадающего размера тело красится `out*0.55+color*0.45`, граница (после erode 3x3) — точным цветом ворот; alpha=255; несовпадающий размер маски игнорируется; пустой кадр нормализуется в 1280x720.full-размер без crop.
+- `compute_ui_layout()` даёт непересекающиеся прямоугольники для 1280x720: верхний ряд, левые видео/маска, правые source/gates, нижние контролы.
+- `radar_gate_visible = enabled && found`: stale-ворота (`enabled=false`) в радаре не отображаются.
+- CAM SET использует канонические диапазоны `CamSettingsConfig::ranges()`, сохраняет настройки локально atomically и шлёт PUB JSON на 5559; whitelist пользовательских контролов исключает `auto_exposure` (Pi принудительно держит manual). Статус честный: «Применено локально: настройки сохранены», «Pi недоступен: настройки не применены» — без выдуманного ACK.
+- SAVE G1..G3 пишет цвет через `GateStore::upsert` + `save_atomic()` и шлёт PUB JSON на 5557. BIND FIELD / POS обновляют статус в нижней панели.
+- Добавлен кириллический диапазон шрифта ImGui для русского INFO.
+- В `widgets.cpp` явные `static_cast<float>` убрали предупреждения `-Wconversion`; сборка чистая.
+- TDD: каждый новый чистый помощник сначала RED (ожидаемое падение из-за отсутствия фичи), затем минимальный GREEN. `theme_test` усилил слабые проверки конкретными оттенками после того, как первый вариант прошёл на stub.
+
+**Проверка**
+```powershell
+$env:Path = 'C:\msys64\mingw64\bin;C:\msys64\usr\bin;' + $env:Path
+& 'C:\msys64\mingw64\bin\cmake.exe' -S . -B build-msys2
+& 'C:\msys64\mingw64\bin\cmake.exe' --build build-msys2
+& 'C:\msys64\mingw64\bin\ctest.exe' --test-dir build-msys2 --output-on-failure
+```
+Результат: configure OK, сборка 100% без предупреждений, `camera_laptop_ui.exe` собирается, `100% tests passed out of 27`, 13.81 sec; новые `help_ru`, `hsv_panel`, `layout_smoke`, `radar_panel`, `cam_settings_panel`, `theme` — Passed. `[VERIFIED]` Скриншот на SDL dummy driver и живой GUI НЕ выполнялись (dummy не даёт OpenGL/ImGui) — отложено до Task 19; PUB-отправка на Pi проверена только статикой/контрактом: `[UNVERIFIED ON HARDWARE]`.
