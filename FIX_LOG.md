@@ -93,3 +93,42 @@ $env:Path = 'C:\msys64\mingw64\bin;C:\msys64\usr\bin;' + $env:Path
 & 'C:\msys64\mingw64\bin\ctest.exe' --test-dir build-msys2 -R gate_cluster --output-on-failure
 ```
 Результат: `gate_cluster` Passed (1/1). `[VERIFIED]`
+
+---
+
+## Task 1 — CMake scaffold and dependency validation
+
+**Bug / root cause**
+- `cmake/Dependencies.cmake` had hardcoded absolute MSYS2/vcpkg fallback paths. A foreign MSYS2 toolchain could satisfy detection while compiling with WinLibs GCC, causing `corecrt_wstdlib.h`/`wchar.h` redefinitions.
+- `${ZMQ_LIBRARIES}` was supplemented with a literal `zmq`, which breaks vcpkg/MSVC where the import library is `libzmq.lib`.
+- OpenCV and libzmq were optional even for runtime targets, with no strict mode.
+- No `Threads::Threads`, `install()`, `GNUInstallDirs`, `BUILD_TESTING`, or CTest skip code for the laptop dependency gate.
+- `kCameraCppSmoke` binary was built but not exercised by CTest; `${CMAKE_SOURCE_DIR}` was used instead of `${PROJECT_SOURCE_DIR}`.
+- Warning options had no opt-in `-Werror`/`/WX` and MSVC did not force UTF-8.
+
+**Modified files**
+- `cmake/Dependencies.cmake`
+- `cmake/Warnings.cmake`
+- `CMakePresets.json`
+- `CMakeLists.txt`
+- `src/CMakeLists.txt`
+- `tests/laptop/dependency_gate_test.cpp`
+- `.gitignore`
+- `FIX_LOG.md`
+
+**Fix / optimization**
+- Removed all hardcoded dependency paths; discovery now uses `find_package()`, pkg-config hints and `CMAKE_PREFIX_PATH`, with every accepted include/lib validated against the active compiler prefix.
+- Added `CAMERA_CPP_REQUIRE_RUNTIME_DEPS` (root option, default OFF); strict mode turns missing/rejected dependencies into `FATAL_ERROR`.
+- Added `Threads::Threads`, `GNUInstallDirs`, `install(TARGETS camera_service ...)`, `BUILD_TESTING`, and CTest `SKIP_RETURN_CODE 77`.
+- Removed the literal `zmq` link; tests now include the smoke binary and the dependency gate returns 77 when laptop deps are absent.
+- Added opt-in `CAMERA_CPP_WERROR` and MSVC `/utf-8`; added toolchain hook, `msys2-release`, and test presets.
+- Switched remaining source-tree references to `${PROJECT_SOURCE_DIR}`; ignored `graphify-out/`.
+
+**Verification**
+```powershell
+$env:Path='C:\msys64\mingw64\bin;C:\msys64\usr\bin;'+$env:Path
+& 'C:\msys64\mingw64\bin\cmake.exe' -S . -B build-msys2
+& 'C:\msys64\mingw64\bin\cmake.exe' --build build-msys2
+& 'C:\msys64\mingw64\bin\ctest.exe' --test-dir build-msys2 --output-on-failure
+```
+Result: configure OK, build OK, `100% tests passed out of 18`. `[VERIFIED]`

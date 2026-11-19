@@ -8,7 +8,7 @@ add_library(camera_common STATIC
   common/cam_settings_config.cpp
 )
 target_link_libraries(camera_common PUBLIC camera_warnings)
-target_include_directories(camera_common PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/common ${CMAKE_SOURCE_DIR}/third_party)
+target_include_directories(camera_common PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/common ${PROJECT_SOURCE_DIR}/third_party)
 
 add_library(camera_vision STATIC
   vision/distance.cpp
@@ -26,6 +26,7 @@ endif()
 
 add_executable(kCameraCppSmoke common/smoke.cpp)
 target_link_libraries(kCameraCppSmoke PRIVATE camera_warnings)
+add_test(NAME common_smoke_binary COMMAND kCameraCppSmoke)
 
 add_executable(kCameraCppAtomicFileTest ../tests/common/atomic_file_test.cpp)
 target_link_libraries(kCameraCppAtomicFileTest PRIVATE camera_common)
@@ -52,7 +53,7 @@ add_library(camera_pi_logic STATIC
   pi_camera/cam_settings.cpp
 )
 target_link_libraries(camera_pi_logic PUBLIC camera_common)
-target_include_directories(camera_pi_logic PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/pi_camera ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/common ${CMAKE_SOURCE_DIR}/third_party)
+target_include_directories(camera_pi_logic PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/pi_camera ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/common ${PROJECT_SOURCE_DIR}/third_party)
 
 add_executable(kCameraCppStatusBuilderTest ../tests/pi_camera/status_builder_test.cpp)
 target_link_libraries(kCameraCppStatusBuilderTest PRIVATE camera_pi_logic)
@@ -66,14 +67,14 @@ if(CAMERA_CPP_HAS_ZMQ)
 add_library(camera_pi_zmq STATIC
   pi_camera/color_listener.cpp
 )
-target_link_libraries(camera_pi_zmq PUBLIC camera_pi_logic camera_common ${ZMQ_LIBRARIES} zmq)
-target_include_directories(camera_pi_zmq PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/pi_camera ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/common ${CMAKE_SOURCE_DIR}/third_party ${ZMQ_INCLUDE_DIRS} ${ZMQ_INCLUDE_DIR})
+target_link_libraries(camera_pi_zmq PUBLIC camera_pi_logic camera_common Threads::Threads ${ZMQ_LIBRARIES})
+target_include_directories(camera_pi_zmq PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/pi_camera ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/common ${PROJECT_SOURCE_DIR}/third_party ${ZMQ_INCLUDE_DIRS} ${ZMQ_INCLUDE_DIR})
 endif()
 
 if(CAMERA_CPP_HAS_OPENCV AND CAMERA_CPP_HAS_ZMQ)
 add_executable(camera_service pi_camera/service_main.cpp)
-target_link_libraries(camera_service PRIVATE camera_pi_camera camera_pi_zmq camera_pi_logic camera_common ${OpenCV_LIBS} ${ZMQ_LIBRARIES} zmq)
-target_include_directories(camera_service PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/common ${CMAKE_CURRENT_SOURCE_DIR}/pi_camera ${CMAKE_SOURCE_DIR}/third_party ${OpenCV_INCLUDE_DIRS} ${ZMQ_INCLUDE_DIRS} ${ZMQ_INCLUDE_DIR})
+target_link_libraries(camera_service PRIVATE camera_pi_camera camera_pi_zmq camera_pi_logic camera_common Threads::Threads ${OpenCV_LIBS} ${ZMQ_LIBRARIES})
+target_include_directories(camera_service PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/common ${CMAKE_CURRENT_SOURCE_DIR}/pi_camera ${PROJECT_SOURCE_DIR}/third_party ${OpenCV_INCLUDE_DIRS} ${ZMQ_INCLUDE_DIRS} ${ZMQ_INCLUDE_DIR})
 endif()
 
 add_executable(kCameraCppGateStoreTest ../tests/common/gate_store_test.cpp)

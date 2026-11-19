@@ -17,6 +17,6 @@ int main() {
 #if CAMERA_CPP_HAS_LAPTOP_DEPS
     return CAMERA_CPP_HAS_VENDORED_IMGUI ? 0 : 2;
 #else
-    return 0;
+    return 77;
 #endif
 }

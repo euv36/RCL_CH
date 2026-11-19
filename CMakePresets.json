@@ -2,7 +2,17 @@
   "version": 6,
   "configurePresets": [
     {
+      "name": "base",
+      "hidden": true,
+      "description": "Common settings. Toolchain hook: set CAMERA_CPP_TOOLCHAIN_PREFIX in the environment to the active toolchain prefix (e.g. C:/msys64/mingw64 for MSYS2 MinGW, or the WinLibs root). It is exported as CMAKE_PREFIX_PATH and used by dependency discovery/validation.",
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "$env{CAMERA_CPP_TOOLCHAIN_PREFIX}",
+        "CAMERA_CPP_WERROR": "OFF"
+      }
+    },
+    {
       "name": "windows-debug",
+      "inherits": "base",
       "generator": "MinGW Makefiles",
       "binaryDir": "${sourceDir}/build-windows-debug",
       "cacheVariables": {
@@ -11,6 +21,7 @@
     },
     {
       "name": "windows-release",
+      "inherits": "base",
       "generator": "MinGW Makefiles",
       "binaryDir": "${sourceDir}/build-windows-release",
       "cacheVariables": {
@@ -18,7 +29,17 @@
       }
     },
     {
+      "name": "msys2-release",
+      "inherits": "base",
+      "generator": "MinGW Makefiles",
+      "binaryDir": "${sourceDir}/build-msys2-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
       "name": "pi-release",
+      "inherits": "base",
       "generator": "Unix Makefiles",
       "binaryDir": "${sourceDir}/build-pi-release",
       "cacheVariables": {
@@ -29,6 +50,29 @@
   "buildPresets": [
     { "name": "windows-debug", "configurePreset": "windows-debug" },
     { "name": "windows-release", "configurePreset": "windows-release" },
+    { "name": "msys2-release", "configurePreset": "msys2-release" },
     { "name": "pi-release", "configurePreset": "pi-release" }
+  ],
+  "testPresets": [
+    {
+      "name": "windows-debug",
+      "configurePreset": "windows-debug",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "windows-release",
+      "configurePreset": "windows-release",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "msys2-release",
+      "configurePreset": "msys2-release",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "pi-release",
+      "configurePreset": "pi-release",
+      "output": { "outputOnFailure": true }
+    }
   ]
 }

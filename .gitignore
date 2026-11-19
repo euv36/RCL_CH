@@ -1,6 +1,7 @@
 build*/
 local/
 out/
+graphify-out/
 *.user
 .vscode/
 .idea/
