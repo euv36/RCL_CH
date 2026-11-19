@@ -657,6 +657,31 @@ $env:Path = 'C:\msys64\mingw64\bin;C:\msys64\usr\bin;' + $env:Path
 
 ---
 
+## Аудит UI — CAM SET, INFO, масштабирование, запуск (2026-11-20)
+
+**Баги**
+1. Текст «TARGET G2» рисовался отдельным `putText` в координатах `{520,630}` — поверх области SAVE, а не на кнопке TARGET.
+2. Окно CAM SET имело фиксированный размер 420×520, кнопки (5 шт.) не помещались по ширине (до ~530 при ширине 520).
+3. INFO не описывал кнопки и слайдеры CAM SET, TARGET, SAVE, BIND FIELD, POS, R/+/-.
+4. Прямой запуск `camera_ui.exe` без PATH падал с «libopencv_500.dll не найден».
+
+**Исправление**
+- Метка TARGET теперь обновляет `bottom_buttons()[0].label` ("TARGET G1..G3") и рисуется на самой кнопке; отдельный `putText` убран.
+- Окно CAM SET стало масштабируемым: `WINDOW_NORMAL`, перетаскивание меняет размер, контент масштабируется через `cv::resize`; базовый размер 640×480, слайдеры и кнопки (в один ряд) помещаются.
+- `help_ru.cpp`: расширены все 7 секций — описания BITMAP/L/A/B, TARGET, SAVE, слайдеров LAB, кнопок CAM SET (SAFE DEFAULTS/SAVE NOW/SEND TO PI/ROLE), BIND FIELD, POS, R/+/-, STALE.
+- В корень проекта добавлены `camera_ui.exe` и лаунчер `camera_ui.cmd` (добавляет MSYS2 bin в PATH); `camera_ui.exe` добавлен в `.gitignore`.
+
+**Проверка**
+```powershell
+$env:Path = 'C:\msys64\mingw64\bin;C:\msys64\usr\bin;' + $env:Path
+& 'C:\msys64\mingw64\bin\cmake.exe' -S . -B build-msys2
+& 'C:\msys64\mingw64\bin\cmake.exe' --build build-msys2
+& 'C:\msys64\mingw64\bin\ctest.exe' --test-dir build-msys2 --output-on-failure
+```
+Результат: configure OK, сборка 100% без предупреждений, `100% tests passed out of 35`, 15.65 с. Живая камера: `camera_ui.exe --source 0` открывает окно `Camera`, процесс жив; окно CAM SET масштабируется. `[VERIFIED]` `[VERIFIED ON LOCAL CAMERA]`
+
+---
+
 ## Исправление радара и инверсии цветов камеры (2026-11-20)
 
 **Баг / корневая причина**
