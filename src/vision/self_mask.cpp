@@ -38,13 +38,17 @@ cv::Mat build_keep_mask(cv::Size size, const SelfMask& mask) {
 
     cv::Mat out(height, width, CV_8UC1, cv::Scalar(0));
     const cv::Point center(cvRound(cx), cvRound(cy));
+    // Keep mask must stay strictly binary (0/255), matching the legacy
+    // equation d2 > r^2 (and d2 < r2^2 for an annulus). cv::LINE_AA leaves a
+    // grey rim; bitwise_and would preserve those partial values and let
+    // robot-body pixels survive into connected components.
     if (outer_radius > 0.0F) {
         // Exclusion modeled as an annulus: center is unusable (robot body),
         // outside the outer radius is unusable too. Mid-annulus remains visible.
-        cv::circle(out, center, cvRound(outer_radius), cv::Scalar(255), cv::FILLED, cv::LINE_AA);
-        cv::circle(out, center, cvRound(radius), cv::Scalar(0), cv::FILLED, cv::LINE_AA);
+        cv::circle(out, center, cvRound(outer_radius), cv::Scalar(255), cv::FILLED, cv::LINE_8);
+        cv::circle(out, center, cvRound(radius), cv::Scalar(0), cv::FILLED, cv::LINE_8);
     } else {
-        cv::circle(out, center, cvRound(radius), cv::Scalar(255), cv::FILLED, cv::LINE_AA);
+        cv::circle(out, center, cvRound(radius), cv::Scalar(255), cv::FILLED, cv::LINE_8);
         out = 255 - out;
     }
     return out;

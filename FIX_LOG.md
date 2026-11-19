@@ -247,3 +247,88 @@ $env:Path = 'C:\msys64\mingw64\bin;C:\msys64\usr\bin;' + $env:Path
 & 'C:\msys64\mingw64\bin\ctest.exe' --test-dir build-msys2 -R cam_settings_config --output-on-failure
 ```
 Результат: сначала тест упал на `!settings.set("unknown_control", 7)`; после исправления `cam_settings_config` Passed (1/1, 0.52 sec). `[VERIFIED]`
+
+---
+
+## Task 7 — Self-mask: строгая бинарность маски сохранения
+
+**Баг / корневая причина**
+- `build_keep_mask()` рисовал окружности с `cv::LINE_AA`, поэтому маска сохранения содержала десятки промежуточных оттенков серого вместо двух допустимых значений 0 и 255.
+- `cv::bitwise_and()` сохранял эти серые пограничные пиксели, и они попадали в `connectedComponentsWithStats`: часть корпуса робота оставалась доступной для поиска ворот. Это нарушало контракт legacy `self_mask.py` / `pi_core/src/self_mask.cpp`, где маска строго бинарна.
+
+**Изменённые файлы**
+- `src/vision/self_mask.cpp`
+- `tests/vision/self_mask_test.cpp`
+- `FIX_LOG.md`
+
+**Исправление / оптимизация**
+- Замена `cv::LINE_AA` на `cv::LINE_8` во всех трёх вызовах `cv::circle` (диск и обе границы кольца); маска снова содержит только 0 и 255.
+- Добавлены регрессии: все значения маски строго бинарны для диска, кольца и повреждённых параметров.
+- Добавлены проверки независимости от разрешения: `cx/cy` масштабируются с шириной/высотой, `r/r2` — с `min(width, height)`.
+
+**Проверка**
+```powershell
+$env:Path = 'C:\msys64\mingw64\bin;C:\msys64\usr\bin;' + $env:Path
+& 'C:\msys64\mingw64\bin\cmake.exe' -S . -B build-msys2
+& 'C:\msys64\mingw64\bin\cmake.exe' --build build-msys2
+& 'C:\msys64\mingw64\bin\ctest.exe' --test-dir build-msys2 -R 'self_mask|distance' --output-on-failure
+```
+Результат: `self_mask` и `distance` Passed (2/2). `[VERIFIED]`
+
+---
+
+## Task 8 — Угол трекинга и центр кадра
+
+**Баг / корневая причина**
+- `TrackingEngine::track()` возвращал угол `atan2` в диапазоне `[-180, 180)`, тогда как сетевой и legacy-контракт требуют `[0, 360)`.
+- Центр кадра вычислялся как `(w-1)/2` и `(h-1)/2`, а legacy-орACLE использует целочисленные `w//2`, `h//2`; это давало систематический сдвиг угла.
+- Тест повторного использования буферов допускал рост `cache_footprint_bytes`, вместо требуемой стабильности после первого кадра.
+
+**Изменённые файлы**
+- `src/vision/tracking.cpp`
+- `tests/vision/tracking_test.cpp`
+- `FIX_LOG.md`
+
+**Исправление / оптимизация**
+- Центр кадра приведён к целочисленному `w/2`, `h/2`; угол нормализуется через `fmod` в `[0, 360)`.
+- Добавлены регрессии для 90, 180 и 270 градусов.
+- Проверка 100 кадров теперь требует точного равенства `cache_footprint_bytes` после первого кадра.
+- Морфология `open_kernel` намеренно отсутствует: legacy её игнорирует, паритет сохранён.
+
+**Проверка**
+```powershell
+$env:Path = 'C:\msys64\mingw64\bin;C:\msys64\usr\bin;' + $env:Path
+& 'C:\msys64\mingw64\bin\cmake.exe' --build build-msys2 --target kCameraCppTrackingTest
+& 'C:\msys64\mingw64\bin\ctest.exe' --test-dir build-msys2 -R tracking --output-on-failure
+```
+Результат: `tracking` Passed (1/1, 1.95 sec). Полная сборка в момент平行的 Task 10 была временно заблокирована его незавершённым интерфейсом `CaptureBackend::properties()`; после завершения Task 10 требуется повторная полная проверка. `[VERIFIED TARGETED]`
+
+---
+
+## Task 9 — Честный статус применения UVC-контролов
+
+**Баг / корневая причина**
+- Когда `v4l2-ctl --get-ctrl` завершался с ошибкой или возвращал неразбираемый вывод, `CamSettings::apply_controls()` всё равно ставил контролу статус `ok`. Это выдуманное подтверждение: команда `set` прошла, но применение не было проверено.
+- `ApplyReport::ok()` не различал «подтверждено камерой» и «нет подтверждения», поэтому такой статус считался успешным.
+- Локальная таблица диапазонов дублировала канонические восемь контролов без явной пометки об источнике; в тесте не было случаев неразбираемого и неудавшегося readback.
+
+**Изменённые файлы**
+- `src/pi_camera/cam_settings.cpp`
+- `tests/pi_camera/cam_settings_test.cpp`
+- `FIX_LOG.md`
+
+**Исправление / оптимизация**
+- Неудавшийся или неразбираемый readback теперь даёт статус `unconfirmed` вместо `ok`; правдоподобное, но отличное от запрошенного значение по-прежнему даёт `mismatch`.
+- `ApplyReport::ok()` возвращает `false` для `error`, `mismatch` и `unconfirmed`.
+- Добавлен явный комментарий, что таблица — локальное зеркало канонических диапазонов из `src/common/cam_settings_config.cpp` (этот файл не трогался); восемь границ совпадают, `auto_exposure` остаётся принудительным `1`.
+- Баланс белого намеренно не добавляется: в legacy-контракте такого контрола нет.
+- Тест через `CAMERA_TEST_CHECK` проверяет `unconfirmed` для неразбираемого вывода и для ошибки `get`, принудительный manual AE и `!report.ok()`; известные контролы, клампинг, `n/a` и `mismatch` сохранены.
+
+**Проверка**
+```powershell
+$env:Path = 'C:\msys64\mingw64\bin;C:\msys64\usr\bin;' + $env:Path
+cmake -S . -B build-msys2
+cmake --build build-msys2
+ctest --test-dir build-msys2 -R cam_settings --output-on-failure
+```
+Результат: после добавления проверок тест упал на `report.controls.at("gamma").status == "unconfirmed"` (строка 57); после исправления `cam_settings` Passed, `cam_settings_config` Passed (2/2, 0.20 sec). `[VERIFIED]`
