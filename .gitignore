@@ -27,3 +27,4 @@ known_hosts
 *.log
 imgui.ini
 secrets*
+camera_ui.exe

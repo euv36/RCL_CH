@@ -93,6 +93,9 @@ private:
     cv::Mat radar_canvas_;
     cv::Mat cam_canvas_;
     cv::Mat help_canvas_;
+    bool cam_window_initialized_ = false;
+    int cam_view_w_ = 640;
+    int cam_view_h_ = 480;
 
     std::array<GateTrackResult, 3> track_results_{};
     std::array<cv::Mat, 3> gate_masks_{};

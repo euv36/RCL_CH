@@ -189,7 +189,7 @@ std::array<CvButton, 5> cam_buttons() {
     std::array<CvButton, 5> buttons{};
     int x = 12;
     for (std::size_t i = 0; i < buttons.size(); ++i) {
-        buttons[i].rect = {x, 380, widths[i], 28};
+        buttons[i].rect = {x, 420, widths[i], 28};
         buttons[i].label = labels[i];
         x += widths[i] + 6;
     }
@@ -538,10 +538,9 @@ void OpenCVApp::render_main() {
                   cv::Scalar(80, 80, 80), 1);
     log_.draw(canvas_, log_rect());
 
-    const auto bottom = bottom_buttons();
+    auto bottom = bottom_buttons();
+    if (!bottom.empty()) bottom[0].label = "TARGET G" + std::to_string(target_gate_);
     for (const auto& button : bottom) button.draw(canvas_, false);
-    cv::putText(canvas_, "TARGET G" + std::to_string(target_gate_), {520, 630},
-                cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(200, 220, 200), 1);
 
     const auto sliders = bottom_sliders();
     for (const auto& slider : sliders) slider.draw(canvas_);
@@ -620,25 +619,45 @@ void OpenCVApp::render_hsv() {
 }
 
 void OpenCVApp::render_cam_settings() {
-    cam_canvas_ = cv::Mat(420, 520, CV_8UC3, cv::Scalar(20, 20, 24));
+    const int base_w = 640;
+    const int base_h = 480;
+    if (!cam_window_initialized_) {
+        cv::namedWindow(kCamWindow, cv::WINDOW_NORMAL);
+        cv::resizeWindow(kCamWindow, base_w, base_h);
+        cv::setMouseCallback(kCamWindow, on_cam_mouse, this);
+        cam_window_initialized_ = true;
+    }
+
+    cam_canvas_ = cv::Mat(base_h, base_w, CV_8UC3, cv::Scalar(20, 20, 24));
     const auto ranges = CamSettingsConfig::ranges();
     int y = 30;
-    for (std::size_t i = 0; i < ranges.size() && i < state_.cam_controls.size(); ++i, y += 42) {
+    for (std::size_t i = 0; i < ranges.size() && i < state_.cam_controls.size(); ++i, y += 44) {
         cv::putText(cam_canvas_, ranges[i].first, {20, y}, cv::FONT_HERSHEY_SIMPLEX,
                     0.5, cv::Scalar(210, 210, 210), 1);
         CvSlider slider;
-        slider.rect = {230, y - 12, 260, 12};
+        slider.rect = {230, y - 12, 300, 12};
         slider.min = ranges[i].second.first;
         slider.max = ranges[i].second.second;
         slider.value = static_cast<int>(state_.cam_controls[i]);
         slider.draw(cam_canvas_);
     }
     const auto buttons = cam_buttons();
-    for (const auto& button : buttons) button.draw(cam_canvas_, false);
-    cv::putText(cam_canvas_, cam_apply_status_text(state_.cam_apply_status), {12, 408},
+    int bx = 12;
+    for (const auto& button : buttons) {
+        CvButton b = button;
+        b.rect = {bx, base_h - 60, button.rect.w, button.rect.h};
+        b.draw(cam_canvas_, false);
+        bx += button.rect.w + 6;
+    }
+    cv::putText(cam_canvas_, cam_apply_status_text(state_.cam_apply_status), {12, base_h - 18},
                 cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(160, 220, 160), 1);
-    cv::imshow(kCamWindow, cam_canvas_);
-    cv::setMouseCallback(kCamWindow, on_cam_mouse, this);
+
+    cv::Rect rect = cv::getWindowImageRect(kCamWindow);
+    cam_view_w_ = (rect.width > 10) ? rect.width : base_w;
+    cam_view_h_ = (rect.height > 10) ? rect.height : base_h;
+    cv::Mat scaled;
+    cv::resize(cam_canvas_, scaled, {cam_view_w_, cam_view_h_}, 0, 0, cv::INTER_LINEAR);
+    cv::imshow(kCamWindow, scaled);
 }
 
 cv::Mat OpenCVApp::build_help_frame() const {
@@ -862,10 +881,14 @@ void OpenCVApp::handle_aux_mouse(const std::string& window, int event, int x, in
     if (event != cv::EVENT_LBUTTONDOWN) return;
 
     if (window == "CAM SET") {
+        if (cam_view_w_ > 10 && cam_view_h_ > 10) {
+            x = x * 640 / cam_view_w_;
+            y = y * 480 / cam_view_h_;
+        }
         const auto ranges = CamSettingsConfig::ranges();
         for (std::size_t i = 0; i < ranges.size() && i < state_.cam_controls.size(); ++i) {
             CvSlider slider;
-            slider.rect = {230, 18 + static_cast<int>(i) * 42, 260, 12};
+            slider.rect = {230, 18 + static_cast<int>(i) * 44, 300, 12};
             slider.min = ranges[i].second.first;
             slider.max = ranges[i].second.second;
             if (slider.rect.contains(x, y)) {
@@ -947,7 +970,10 @@ int OpenCVApp::run() {
         if (state_.show_hsv && !portrait_frame_.empty()) render_hsv();
         else cv::destroyWindow(kHsvWindow);
         if (state_.show_cam_settings) render_cam_settings();
-        else cv::destroyWindow(kCamWindow);
+        else {
+            cv::destroyWindow(kCamWindow);
+            cam_window_initialized_ = false;
+        }
         if (state_.show_help) render_help();
         else cv::destroyWindow(kHelpWindow);
 
