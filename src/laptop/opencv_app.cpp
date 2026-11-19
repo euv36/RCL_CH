@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <sstream>
 #include <utility>
+#include <vector>
 
 #include "cam_settings_config.hpp"
 #include "clipboard_text.hpp"
@@ -180,10 +181,58 @@ int button_at(const std::array<CvButton, 11>& buttons, int x, int y) {
     return -1;
 }
 
+// Кнопки окна CAM SET.
+std::array<CvButton, 5> cam_buttons() {
+    const std::array<const char*, 5> labels = {
+        "SAFE DEFAULTS", "SAVE NOW", "SEND TO PI", "ROLE OURS", "ROLE OPP"};
+    const std::array<int, 5> widths = {130, 96, 100, 96, 96};
+    std::array<CvButton, 5> buttons{};
+    int x = 12;
+    for (std::size_t i = 0; i < buttons.size(); ++i) {
+        buttons[i].rect = {x, 380, widths[i], 28};
+        buttons[i].label = labels[i];
+        x += widths[i] + 6;
+    }
+    return buttons;
+}
+
+// Вкладки справки INFO: идентификаторы разделов на латинице для HighGUI.
+std::array<CvButton, 7> help_tabs() {
+    const auto& sections = HelpRu::sections();
+    std::array<CvButton, 7> buttons{};
+    for (std::size_t i = 0; i < buttons.size(); ++i) {
+        buttons[i].rect = {10 + static_cast<int>(i) * 126, 10, 120, 28};
+        buttons[i].label = i < sections.size() ? sections[i].id : "";
+    }
+    return buttons;
+}
+
+// Индекс кнопки под курсором или -1.
+template <std::size_t N>
+int find_button(const std::array<CvButton, N>& buttons, int x, int y) {
+    for (std::size_t i = 0; i < N; ++i) {
+        if (buttons[i].rect.contains(x, y)) return static_cast<int>(i);
+    }
+    return -1;
+}
+
 // Статический мост HighGUI → экземпляр приложения.
 void on_mouse(int event, int x, int y, int flags, void* userdata) {
     auto* app = static_cast<OpenCVApp*>(userdata);
     if (app != nullptr) app->handle_mouse(event, x, y, flags);
+}
+
+// Мосты для вспомогательных окон; имя окна передаётся в приложение.
+void on_cam_mouse(int event, int x, int y, int flags, void* userdata) {
+    (void)flags;
+    auto* app = static_cast<OpenCVApp*>(userdata);
+    if (app != nullptr) app->handle_aux_mouse("CAM SET", event, x, y);
+}
+
+void on_help_mouse(int event, int x, int y, int flags, void* userdata) {
+    (void)flags;
+    auto* app = static_cast<OpenCVApp*>(userdata);
+    if (app != nullptr) app->handle_aux_mouse("INFO", event, x, y);
 }
 
 } // namespace
@@ -310,6 +359,7 @@ void OpenCVApp::connect_source() {
         }
     } else if (request.kind == AppState::SourceKind::Local) {
         capture_.open(request.camera_index, cv::CAP_ANY);
+        capture_.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'));
         capture_.set(cv::CAP_PROP_FRAME_WIDTH, 1920);
         capture_.set(cv::CAP_PROP_FRAME_HEIGHT, 1080);
         if (!capture_.isOpened()) {
@@ -454,27 +504,49 @@ void OpenCVApp::render_main() {
     cv::imshow(kMainWindow, canvas_);
 }
 
-void OpenCVApp::render_radar() {
-    radar_canvas_ = cv::Mat(300, 400, CV_8UC3, cv::Scalar(15, 20, 15));
-    const cv::Point center(200, 210);
-    for (int r = 50; r <= 150; r += 50) {
-        cv::circle(radar_canvas_, center, r, cv::Scalar(50, 80, 50), 1);
+cv::Mat OpenCVApp::build_radar_frame() const {
+    cv::Mat frame(440, 440, CV_8UC3, cv::Scalar(15, 20, 15));
+    const cv::Point center(220, 250);
+    for (int r = 60; r <= 180; r += 60) {
+        cv::circle(frame, center, r, cv::Scalar(50, 90, 50), 1);
     }
-    cv::line(radar_canvas_, {center.x - 170, center.y}, {center.x + 170, center.y},
-             cv::Scalar(50, 80, 50), 1);
+    cv::line(frame, {center.x - 200, center.y}, {center.x + 200, center.y},
+             cv::Scalar(50, 90, 50), 1);
+    cv::line(frame, {center.x, center.y - 200}, {center.x, center.y + 200},
+             cv::Scalar(50, 90, 50), 1);
+
+    const auto roles = gate_store_.roles();
     for (const auto& gate : state_.radar_gates) {
-        if (!radar_gate_visible(gate)) continue;
+        const int slot = gate.id - 1;
+        if (slot < 0 || slot > 2 || !radar_gate_visible(gate)) continue;
         const double radians = gate.angle_deg * CV_PI / 180.0;
-        const int radius = std::clamp(static_cast<int>(gate.distance_cm / 4.0), 20, 150);
+        const int radius = std::clamp(static_cast<int>(gate.distance_cm / 5.0F), 20, 180);
         const cv::Point point(center.x + static_cast<int>(std::sin(radians) * radius),
                               center.y - static_cast<int>(std::cos(radians) * radius));
-        cv::circle(radar_canvas_, point, 6,
-                   cv::Scalar(gate.rgb[2], gate.rgb[1], gate.rgb[0]), cv::FILLED);
+        const cv::Scalar color(gate.rgb[2], gate.rgb[1], gate.rgb[0]);
+        cv::circle(frame, point, 7, color, cv::FILLED);
+        std::string tag = "G" + std::to_string(gate.id);
+        if (roles[slot] == "ours") tag += " OURS";
+        else if (roles[slot] == "opponent") tag += " OPP";
+        cv::putText(frame, tag, {point.x + 9, point.y - 9}, cv::FONT_HERSHEY_SIMPLEX,
+                    0.4, color, 1);
     }
+
+    const std::string advice = state_.bind_field_status.empty()
+        ? "EDGE: BIND FIELD to estimate" : "EST: " + state_.bind_field_status;
+    cv::putText(frame, advice, {12, 28}, cv::FONT_HERSHEY_SIMPLEX, 0.5,
+                cv::Scalar(160, 220, 160), 1);
+    cv::putText(frame, "RADAR  POS " + std::to_string(state_.position_preset),
+                {12, 425}, cv::FONT_HERSHEY_SIMPLEX, 0.45, cv::Scalar(180, 180, 180), 1);
+    return frame;
+}
+
+void OpenCVApp::render_radar() {
+    radar_canvas_ = build_radar_frame();
     cv::imshow(kRadarWindow, radar_canvas_);
 }
 
-void OpenCVApp::render_hsv() {
+cv::Mat OpenCVApp::build_hsv_frame() const {
     HsvPalette palette;
     for (int i = 0; i < 3; ++i) {
         palette.gate_colors[i] = cv::Vec3b(
@@ -482,15 +554,31 @@ void OpenCVApp::render_hsv() {
             static_cast<uchar>(state_.gate_colors[i][1]),
             static_cast<uchar>(state_.gate_colors[i][0]));
     }
-    hsv_frame_ = build_hsv_mask_bgra(portrait_frame_, gate_masks_, palette);
-    if (!hsv_frame_.empty()) cv::imshow(kHsvWindow, hsv_frame_);
+    cv::Mat frame = build_hsv_mask_bgra(portrait_frame_, gate_masks_, palette);
+    cv::putText(frame, "HSV MASK", {10, 30}, cv::FONT_HERSHEY_SIMPLEX,
+                0.7, cv::Scalar(255, 255, 255, 255), 2);
+    for (int i = 0; i < 3; ++i) {
+        if (!state_.gate_enabled[i]) continue;
+        const int y = 52 + i * 28;
+        cv::rectangle(frame, {10, y - 14}, {34, y + 8},
+                      cv::Scalar(state_.gate_colors[i][2], state_.gate_colors[i][1],
+                                 state_.gate_colors[i][0], 255), cv::FILLED);
+        cv::putText(frame, "G" + std::to_string(i + 1), {42, y + 5},
+                    cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 255, 255, 255), 1);
+    }
+    return frame;
+}
+
+void OpenCVApp::render_hsv() {
+    hsv_frame_ = build_hsv_frame();
+    cv::imshow(kHsvWindow, hsv_frame_);
 }
 
 void OpenCVApp::render_cam_settings() {
     cam_canvas_ = cv::Mat(420, 520, CV_8UC3, cv::Scalar(20, 20, 24));
     const auto ranges = CamSettingsConfig::ranges();
     int y = 30;
-    for (std::size_t i = 0; i < ranges.size() && i < state_.cam_controls.size(); ++i, y += 48) {
+    for (std::size_t i = 0; i < ranges.size() && i < state_.cam_controls.size(); ++i, y += 42) {
         cv::putText(cam_canvas_, ranges[i].first, {20, y}, cv::FONT_HERSHEY_SIMPLEX,
                     0.5, cv::Scalar(210, 210, 210), 1);
         CvSlider slider;
@@ -500,23 +588,37 @@ void OpenCVApp::render_cam_settings() {
         slider.value = static_cast<int>(state_.cam_controls[i]);
         slider.draw(cam_canvas_);
     }
-    cv::putText(cam_canvas_, cam_apply_status_text(state_.cam_apply_status), {20, 405},
+    const auto buttons = cam_buttons();
+    for (const auto& button : buttons) button.draw(cam_canvas_, false);
+    cv::putText(cam_canvas_, cam_apply_status_text(state_.cam_apply_status), {12, 408},
                 cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(160, 220, 160), 1);
     cv::imshow(kCamWindow, cam_canvas_);
+    cv::setMouseCallback(kCamWindow, on_cam_mouse, this);
+}
+
+cv::Mat OpenCVApp::build_help_frame() const {
+    cv::Mat frame(720, 900, CV_8UC3, cv::Scalar(16, 16, 20));
+    const auto& sections = HelpRu::sections();
+    const auto tabs = help_tabs();
+    const int active = std::clamp(help_tab_, 0, static_cast<int>(tabs.size()) - 1);
+    for (int i = 0; i < static_cast<int>(tabs.size()); ++i) {
+        tabs[i].draw(frame, i == active);
+    }
+    if (active < static_cast<int>(sections.size())) {
+        int y = 62;
+        for (const auto& line : sections[active].lines) {
+            cv::putText(frame, line.substr(0, 110), {20, y}, cv::FONT_HERSHEY_SIMPLEX,
+                        0.45, cv::Scalar(220, 220, 220), 1);
+            y += 24;
+        }
+    }
+    return frame;
 }
 
 void OpenCVApp::render_help() {
-    help_canvas_ = cv::Mat(720, 900, CV_8UC3, cv::Scalar(16, 16, 20));
-    const std::string text = HelpRu::combined_text();
-    std::istringstream stream(text);
-    std::string line;
-    int y = 30;
-    while (std::getline(stream, line) && y < 710) {
-        cv::putText(help_canvas_, line.substr(0, 110), {20, y}, cv::FONT_HERSHEY_SIMPLEX,
-                    0.42, cv::Scalar(220, 220, 220), 1);
-        y += 19;
-    }
+    help_canvas_ = build_help_frame();
     cv::imshow(kHelpWindow, help_canvas_);
+    cv::setMouseCallback(kHelpWindow, on_help_mouse, this);
 }
 
 void OpenCVApp::handle_key(int key) {
@@ -540,11 +642,14 @@ void OpenCVApp::handle_key(int key) {
         return;
     }
     switch (key) {
-        case 'r': case 'R': state_.show_radar = !state_.show_radar; break;
+        case 'd': case 'D': state_.show_radar = !state_.show_radar; break;
         case 'h': case 'H': state_.show_hsv = !state_.show_hsv; break;
         case 'i': case 'I': state_.show_help = !state_.show_help; break;
         case 'c': case 'C': state_.show_cam_settings = !state_.show_cam_settings; break;
         case 'p': case 'P': state_.paused = !state_.paused; break;
+        case 'r': case 'R': calibrate_lab(0); break;
+        case '+': case '=': calibrate_lab(2); break;
+        case '-': case '_': calibrate_lab(-2); break;
         case '1': state_.view_mode = AppState::ViewMode::Bitmap; break;
         case '2': state_.view_mode = AppState::ViewMode::LabL; break;
         case '3': state_.view_mode = AppState::ViewMode::LabA; break;
@@ -578,7 +683,7 @@ void OpenCVApp::handle_mouse(int event, int x, int y, int flags) {
             case 4: state_.paused = !state_.paused; break;
             case 5: state_.show_cam_settings = !state_.show_cam_settings; break;
             case 6: state_.show_radar = !state_.show_radar; break;
-            case 7: state_.bind_field_status = "field bound"; break;
+            case 7: bind_field(); break;
             case 8: state_.position_preset = (state_.position_preset + 1) % 3; break;
             case 9: state_.show_hsv = !state_.show_hsv; break;
             case 10: state_.show_help = !state_.show_help; break;
@@ -612,6 +717,126 @@ void OpenCVApp::handle_mouse(int event, int x, int y, int flags) {
     }
 }
 
+void OpenCVApp::send_cam_settings() {
+    if (!publisher_.bound()) return;
+    publisher_.publish_cam_settings(state_.cam_controls);
+    state_.cam_apply_status = CamApplyStatus::Sending;
+    last_cam_send_ = clock::now();
+    log_.push("CAM SET sent to Pi");
+}
+
+void OpenCVApp::calibrate_lab(int delta) {
+    const int slot = target_gate_;
+    const std::size_t index = static_cast<std::size_t>(slot - 1);
+    const auto record = gate_store_.gate(static_cast<GateId>(slot));
+    GateLab lab = record && record->lab ? *record->lab : GateLab{50, 90, -20, 20, -20, 20};
+
+    if (delta == 0) {
+        // R: пересчёт диапазона по сохранённому цвету целевых ворот.
+        const RgbLab measured = rgb_to_lab_u8(
+            static_cast<uint8_t>(std::clamp(state_.gate_colors[index][0], 0, 255)),
+            static_cast<uint8_t>(std::clamp(state_.gate_colors[index][1], 0, 255)),
+            static_cast<uint8_t>(std::clamp(state_.gate_colors[index][2], 0, 255)));
+        lab = {std::clamp(static_cast<int>(measured.L) - 10, 0, 100),
+               std::clamp(static_cast<int>(measured.L) + 10, 0, 100),
+               std::clamp(static_cast<int>(measured.A) - 15, -128, 127),
+               std::clamp(static_cast<int>(measured.A) + 15, -128, 127),
+               std::clamp(static_cast<int>(measured.B) - 15, -128, 127),
+               std::clamp(static_cast<int>(measured.B) + 15, -128, 127)};
+    } else {
+        for (int i = 0; i < 6; ++i) {
+            lab[i] = std::clamp(lab[i] + delta, i >= 2 ? -128 : 0, i >= 2 ? 127 : 100);
+        }
+    }
+
+    const auto roles = gate_store_.roles();
+    gate_store_.upsert(static_cast<GateId>(slot),
+                       {state_.gate_colors[index][0], state_.gate_colors[index][1],
+                        state_.gate_colors[index][2]},
+                       roles[index], lab);
+    gate_store_.save_atomic();
+    colors_dirty_ = true;
+    state_.gate_save_status = "G" + std::to_string(slot) + " LAB tuned";
+    log_.push(state_.gate_save_status);
+}
+
+void OpenCVApp::bind_field() {
+    std::vector<FieldObservationInput> observations;
+    for (int i = 0; i < 3; ++i) {
+        const GateTrackResult& result = track_results_[i];
+        const RadarGate& radar = state_.radar_gates[i];
+        observations.push_back({i + 1, state_.gate_enabled[i],
+                                result.found || radar.found,
+                                result.found ? result.angle_deg : radar.angle_deg,
+                                result.dist_cm > 0.0F ? result.dist_cm : radar.distance_cm,
+                                result.held});
+    }
+    const float offset = state_.position_preset == 1 ? 90.0F : 0.0F;
+    const FieldBindResult result = field_map_.bind_from_results(observations, offset, 0.0F);
+    state_.bind_field_status = result.ok ? "field bound"
+        : (result.warning.empty() ? "bind failed" : result.warning);
+    if (result.ok) field_map_.save_atomic();
+    log_.push("BIND FIELD: " + state_.bind_field_status);
+}
+
+void OpenCVApp::set_gate_role(int slot, const std::string& role) {
+    if (slot < 1 || slot > 3) return;
+    const std::size_t index = static_cast<std::size_t>(slot - 1);
+    const auto record = gate_store_.gate(static_cast<GateId>(slot));
+    gate_store_.upsert(static_cast<GateId>(slot),
+                       {state_.gate_colors[index][0], state_.gate_colors[index][1],
+                        state_.gate_colors[index][2]},
+                       role, record && record->lab ? record->lab : std::nullopt);
+    gate_store_.save_atomic();
+    colors_dirty_ = true;
+    state_.gate_save_status = "G" + std::to_string(slot) + " role " + role;
+    log_.push(state_.gate_save_status);
+}
+
+void OpenCVApp::handle_aux_mouse(const std::string& window, int event, int x, int y) {
+    if (event != cv::EVENT_LBUTTONDOWN) return;
+
+    if (window == "CAM SET") {
+        const auto ranges = CamSettingsConfig::ranges();
+        for (std::size_t i = 0; i < ranges.size() && i < state_.cam_controls.size(); ++i) {
+            CvSlider slider;
+            slider.rect = {230, 18 + static_cast<int>(i) * 42, 260, 12};
+            slider.min = ranges[i].second.first;
+            slider.max = ranges[i].second.second;
+            if (slider.rect.contains(x, y)) {
+                state_.cam_controls[i] = static_cast<float>(slider.value_from_x(x));
+                return;
+            }
+        }
+        switch (find_button(cam_buttons(), x, y)) {
+            case 0:
+                state_.cam_controls = {{300.0F, 0.0F, 0.0F, 100.0F, 60.0F, 32.0F, 1.0F, 0.0F}};
+                state_.cam_apply_status = CamApplyStatus::Idle;
+                log_.push("CAM SET defaults restored");
+                break;
+            case 1: {
+                for (std::size_t i = 0; i < ranges.size() && i < state_.cam_controls.size(); ++i) {
+                    cam_config_.set(ranges[i].first, state_.cam_controls[i]);
+                }
+                state_.cam_send_status = cam_config_.save() ? "saved" : "save failed";
+                state_.cam_apply_status = CamApplyStatus::Applied;
+                log_.push("CAM SET " + state_.cam_send_status);
+                break;
+            }
+            case 2: send_cam_settings(); break;
+            case 3: set_gate_role(target_gate_, "ours"); break;
+            case 4: set_gate_role(target_gate_, "opponent"); break;
+            default: break;
+        }
+        return;
+    }
+
+    if (window == "INFO") {
+        const int pressed = find_button(help_tabs(), x, y);
+        if (pressed >= 0) help_tab_ = pressed;
+    }
+}
+
 int OpenCVApp::run() {
     load_saved_gates();
     cv::namedWindow(kMainWindow, cv::WINDOW_NORMAL);
@@ -640,6 +865,10 @@ int OpenCVApp::run() {
 
         if (!frame.empty() && !state_.paused) process_frame(frame);
         publish_colors();
+        if (state_.show_cam_settings &&
+            clock::now() - last_cam_send_ >= std::chrono::seconds(5)) {
+            send_cam_settings();
+        }
         render_main();
         if (state_.show_radar) render_radar();
         else cv::destroyWindow(kRadarWindow);

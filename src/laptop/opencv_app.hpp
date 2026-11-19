@@ -14,6 +14,8 @@
 #include "laptop/state.hpp"
 #include "laptop/status_panel_client.hpp"
 
+#include "cam_settings_config.hpp"
+#include "field_map.hpp"
 #include "gate_store.hpp"
 #include "tracking.hpp"
 
@@ -45,6 +47,14 @@ public:
     // Обрабатывает событие мыши HighGUI.
     void handle_mouse(int event, int x, int y, int flags);
 
+    // обрабатывает мышь во вспомогательных окнах.
+    void handle_aux_mouse(const std::string& window, int event, int x, int y);
+
+    // Строит кадры вспомогательных окон без вывода на экран.
+    cv::Mat build_radar_frame() const;
+    cv::Mat build_hsv_frame() const;
+    cv::Mat build_help_frame() const;
+
     AppState& state();
     const AppState& state() const;
 
@@ -59,6 +69,10 @@ private:
     void connect_source();
     void save_gate(int slot);
     void publish_colors(bool force = false);
+    void send_cam_settings();
+    void calibrate_lab(int delta);
+    void bind_field();
+    void set_gate_role(int slot, const std::string& role);
     void render_main();
     void render_radar();
     void render_hsv();
@@ -84,6 +98,8 @@ private:
     std::array<cv::Mat, 3> gate_masks_{};
     ParsedStatus status_{};
     CvLog log_;
+    FieldMap field_map_;
+    CamSettingsConfig cam_config_;
     cv::VideoCapture capture_;
     cv::Point selection_start_{};
     cv::Point selection_current_{};
@@ -94,10 +110,12 @@ private:
     int frames_processed_ = 0;
     int selected_threshold_slot_ = 0;
     int target_gate_ = 1;
+    int help_tab_ = 0;
     bool quit_requested_ = false;
     bool need_connect_ = false;
     bool colors_dirty_ = true;
     std::chrono::steady_clock::time_point last_color_send_{};
+    std::chrono::steady_clock::time_point last_cam_send_{};
 };
 
 } // namespace camera_cpp::laptop
