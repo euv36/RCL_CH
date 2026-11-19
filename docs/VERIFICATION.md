@@ -53,3 +53,42 @@ Local loopback coverage of the same wire contract already passed in Task 11 (`pi
 - Прошивка firmware, работа с роботом, сон ноутбука — не выполнялись.
 
 Все сообщения про достоверность обнаружения ворот остаются относительными к текущему кадру: `found=false` в пустой комнате — ожидаемый результат.
+
+## OpenCV HighGUI client `camera_ui` — `[VERIFIED LOCALLY]`, Pi `[UNVERIFIED ON HARDWARE]`
+
+Новый клиент заменяет legacy `cv_kostyl.py`: одно приложение показывает видео Pi и все панели (CAM SET, RADAR, HSV MASK, INFO). Pi в этой итерации не модифицировался и не подключался.
+
+**Сборка и локальные тесты**
+
+```powershell
+$env:Path = 'C:\msys64\mingw64\bin;C:\msys64\usr\bin;' + $env:Path
+& 'C:\msys64\mingw64\bin\cmake.exe' -S . -B build-msys2
+& 'C:\msys64\mingw64\bin\cmake.exe' --build build-msys2
+& 'C:\msys64\mingw64\bin\ctest.exe' --test-dir build-msys2 --output-on-failure
+```
+
+Результат: configure OK, сборка без предупреждений, `100% tests passed out of 35`, 15.33 sec. `git diff --check` чисто.
+
+**Запуск на ПК**
+
+```powershell
+$env:Path = 'C:\msys64\mingw64\bin;C:\msys64\usr\bin;' + $env:Path
+& '.\build-msys2\src\camera_ui.exe'
+```
+
+В поле источника ввести `10.132.122.51` и нажать CONNECT (или Enter). Окно `Camera` 1280x720 показывает портретный кадр и результат трекинга; верхний ряд кнопок переключает режимы и панели, `SAVE G1..3` сохраняет цвета ворот, `BIND FIELD` привязывает поле, `CAM SET` отправляет настройки камеры на Pi каждые 5 с.
+
+Для `cmd.exe`:
+
+```cmd
+set "PATH=C:\msys64\mingw64\bin;C:\msys64\usr\bin;%PATH%"
+build-msys2\src\camera_ui.exe
+```
+
+HighGUI в MSYS2 использует Qt6; необходимые DLL установлены пакетом `mingw-w64-x86_64-qt6-base`.
+
+**Не проверялось**
+
+- Живое подключение к Pi `10.132.122.51` и приём кадра с порта 5555 в рамках этого rewrite: Pi отключён, явного разрешения на подключение не было.
+- Отправка CAM SET и цветов ворот на реальный Pi, работа с роботом по serial, прошивка — не выполнялись.
+- Сон ноутбука не выполнялся.

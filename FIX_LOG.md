@@ -654,3 +654,37 @@ $env:Path = 'C:\msys64\mingw64\bin;C:\msys64\usr\bin;' + $env:Path
 - `ss -ltn` подтверждает прослушивание 5555/5557/5559.
 - Smoke с ноутбука: `ok=true`, `messages=1`, `valid_jpeg=1`, `valid_json=1`, `fps≈9.8`, `frame_wh=[640,360]`, `src=pi`. `[VERIFIED ON HARDWARE]`
 - Прошивка и последовательный порт не трогались; сон ноутбука не выполнялся.
+
+---
+
+## OpenCV UI: перенос legacy-интерфейса на ПК
+
+**Причина / корневая проблема**
+- Legacy `cv_kostyl.py` показывал камеру и все панели на ПК, но зависел от Python-стека; нативному клиенту не хватало одного окна с видео и всеми элементами управления.
+- Существовавший ImGui-интерфейс и отдельный viewer не соответствовали выбранному пути: один клиент на OpenCV HighGUI с окнами Camera / CAM SET / RADAR / HSV MASK / INFO.
+- OpenCV highgui в MSYS2 собран с Qt6: без компонента `highgui` в `find_package` и без пакета `mingw-w64-x86_64-qt6-base` исполняемый файл падал при запуске (exit `-1073741515`).
+
+**Изменённые файлы**
+- `cmake/Dependencies.cmake`, `src/CMakeLists.txt`
+- `src/laptop/cv_widgets.hpp/.cpp`, `src/laptop/opencv_app.hpp/.cpp`, `src/laptop/opencv_main.cpp`
+- `tests/laptop/cv_widgets_test.cpp`, `tests/laptop/opencv_app_test.cpp`
+- `.superpowers/sdd/2026-11-19-opencv-ui-rewrite/progress.md`
+
+**Исправление / оптимизация**
+- Добавлены ZMQ SUB-клиент 5555 с JPEG и статусом, парсер статуса с определением устаревания по времени получения кадра и PUB 5557/5559 для цветов ворот и CAM SET.
+- `ZMQ_CONFLATE` убран: в этой версии libzmq он оставлял только последнюю часть multipart (JSON) и терял JPEG; вместо этого очередь дренируется вручную.
+- Реализованы виджеты OpenCV (`CvRect`, `CvButton`, `CvSlider`, `CvTextInput`, `CvLog`) с кольцевым буфером на 10 записей и безопасной отрисовкой на пустом кадре.
+- `OpenCVApp` рисует главное окно 1280x720, поворачивает кадр Pi 640x360 → портрет 720x1280, запускает трекинг на ПК, показывает статус и лог, обрабатывает клавиатуру и мышь, подключается к Pi по IP или к локальной камере.
+- Полный паритет legacy: RADAR с дугами, ролями и привязкой поля; HSV MASK с легендой; CAM SET с 8 слайдерами и кнопками (отправка каждые 5 с); INFO с 7 вкладками; `BIND FIELD`, `POS`, `TARGET`, `SAVE G1..3`; калибровка LAB (`R`, `+`, `-`).
+- `R` используется для LAB-рекалибровки, горячая клавиша RADAR перемещена на `D` (цена — изменение клавиатуры относительно предыдущей версии UI).
+- `find_package(OpenCV)` теперь запрашивает компонент `highgui`; для запуска нужны Qt6 DLL пакета `mingw-w64-x86_64-qt6-base`.
+
+**Проверка**
+```powershell
+$env:Path = 'C:\msys64\mingw64\bin;C:\msys64\usr\bin;' + $env:Path
+& 'C:\msys64\mingw64\bin\cmake.exe' -S . -B build-msys2
+& 'C:\msys64\mingw64\bin\cmake.exe' --build build-msys2
+& 'C:\msys64\mingw64\bin\ctest.exe' --test-dir build-msys2 --output-on-failure
+```
+Результат: configure OK, сборка без предупреждений, `100% tests passed out of 35`, 15.33 sec; `git diff --check` чисто. `[VERIFIED]`
+Живая проверка с Pi в рамках этого rewrite НЕ выполнялась: Pi отключён, сетевые подключения не производились. Arduino физически отключён, прошивка и последовательный порт не трогались. `[UNVERIFIED ON HARDWARE]`
