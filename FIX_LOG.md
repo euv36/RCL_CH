@@ -411,3 +411,35 @@ $env:Path = 'C:\msys64\mingw64\bin;C:\msys64\usr\bin;' + $env:Path
 & 'C:\msys64\mingw64\bin\ctest.exe' --test-dir build-msys2 --output-on-failure
 ```
 Результат: configure OK, сборка 100%, `100% tests passed out of 19`, 13.23 sec; `pi_zmq_loopback` Passed (10.61 sec), `status_builder` Passed. `[VERIFIED]`
+
+---
+
+## Task 8 (follow-up) — Удержание ворот при кратковременной потере
+
+**Баг / корневая причина**
+- `TrackingEngine` вообще не использовал `GateStability`: при пустом кадре результат становился `found=false`, хотя legacy-орACLE публикует последнее принятое положение с `held=true` в течение `lost_frames` кадров.
+- Из-за этого `GateTrackResult.held` всегда был `false`, и статус камеры никогда не показывал удержание ворот.
+- При отсутствии `previous_positions` кластеризация теряла опору на последнюю принятую позицию, что расходилось с legacy.
+
+**Изменённые файлы**
+- `src/vision/tracking.hpp`
+- `src/vision/tracking.cpp`
+- `tests/vision/tracking_test.cpp`
+- `FIX_LOG.md`
+
+**Исправление / оптимизация**
+- Добавлены состояния на слот: `GateStability`, последний bbox/положение, флаг наличия положения и последняя дистанция.
+- Каждый кадр выполняет один `stability_.update()` (включая пустые кадры); во время удержания публикуются `found=true`, `held=true` и последнее положение, после `lost_frames` — потеря.
+- При удержании не обновляется дистанция по устаревшему радиусу (`dist_reliable=false`), сохраняются bbox и маска последнего принятого кадра.
+- `build_gate_object()` использует последнюю принятую позицию как якорь, если вызывающий не передал `previous_positions`.
+- Отключение слота сбрасывает всё связанное состояние.
+- Тест проверяет первый кадр без `held`, четыре кадра удержания с сохранением угла/радиуса/маски и потерю на пятом пустом кадре; тест углов использует отдельный engine, чтобы состояние stability не влияло на соседние сцены.
+
+**Проверка**
+```powershell
+$env:Path = 'C:\msys64\mingw64\bin;C:\msys64\usr\bin;' + $env:Path
+& 'C:\msys64\mingw64\bin\cmake.exe' -S . -B build-msys2
+& 'C:\msys64\mingw64\bin\cmake.exe' --build build-msys2
+& 'C:\msys64\mingw64\bin\ctest.exe' --test-dir build-msys2 --output-on-failure
+```
+Результат: сборка 100%, `tracking` Passed (1/1, 1.41 sec), полный набор `100% tests passed out of 19`, 12.98 sec. `[VERIFIED]`

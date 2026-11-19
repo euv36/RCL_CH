@@ -78,7 +78,10 @@ int main() {
         TrackInput scene_input;
         scene_input.portrait_rgb = &scene;
         scene_input.thresholds[0] = threshold_for_rgb(cv::Vec3b(255, 255, 0));
-        const float angle = track_gates(scene_input)[0].angle_deg;
+        // A fresh engine: the shared track_gates() engine keeps stability state
+        // between calls, so unrelated scenes would be treated as a lost gate.
+        TrackingEngine scene_engine;
+        const float angle = scene_engine.track(scene_input)[0].angle_deg;
         CAMERA_TEST_CHECK(angle >= 0.0F && angle < 360.0F);
         return angle;
     };
@@ -88,6 +91,33 @@ int main() {
     CAMERA_TEST_CHECK(std::abs(angle_for_gate_rect(cv::Rect(585, 46, 111, 150)) - 90.0F) < 1.5F);
     CAMERA_TEST_CHECK(std::abs(angle_for_gate_rect(cv::Rect(265, 285, 111, 151)) - 180.0F) < 1.5F);
     CAMERA_TEST_CHECK(std::abs(angle_for_gate_rect(cv::Rect(585, 525, 111, 150)) - 270.0F) < 1.5F);
+
+    // Stability must publish the last accepted position during the occlusion
+    // grace period and drop it only after lost_frames empty frames.
+    TrackingEngine hold_engine;
+    TrackInput hold_input;
+    hold_input.portrait_rgb = &image;
+    hold_input.thresholds[0] = threshold_for_rgb(cv::Vec3b(255, 255, 0));
+    const auto fresh = hold_engine.track(hold_input);
+    CAMERA_TEST_CHECK(fresh[0].found);
+    CAMERA_TEST_CHECK(!fresh[0].held);
+    const float fresh_angle = fresh[0].angle_deg;
+    const float fresh_radius = fresh[0].radius_px;
+
+    cv::Mat blank(720, 1280, CV_8UC3, cv::Scalar(25, 25, 30));
+    hold_input.portrait_rgb = &blank;
+    for (int i = 0; i < 4; ++i) {
+        const auto grace = hold_engine.track(hold_input);
+        CAMERA_TEST_CHECK(grace[0].found);
+        CAMERA_TEST_CHECK(grace[0].held);
+        CAMERA_TEST_CHECK(std::abs(grace[0].angle_deg - fresh_angle) < 0.5F);
+        CAMERA_TEST_CHECK(std::abs(grace[0].radius_px - fresh_radius) < 0.5F);
+        CAMERA_TEST_CHECK(!grace[0].dist_reliable);
+        CAMERA_TEST_CHECK(!grace[0].mask.empty());
+    }
+    const auto lost = hold_engine.track(hold_input);
+    CAMERA_TEST_CHECK(!lost[0].found);
+    CAMERA_TEST_CHECK(!lost[0].held);
 
     TrackingEngine engine;
     std::size_t previous_footprint = 0;

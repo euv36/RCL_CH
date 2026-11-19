@@ -76,6 +76,13 @@ std::array<GateTrackResult, 3> TrackingEngine::track(const TrackInput& input) {
         auto& mask = raw_masks_[slot];
         if (!results[slot].enabled) {
             mask.release();
+            filtered_masks_[slot].release();
+            component_masks_[slot].release();
+            stability_[slot].reset();
+            distance_estimators_[slot].reset();
+            has_last_position_[slot] = false;
+            last_dist_cm_[slot] = 0.0F;
+            last_bbox_[slot] = cv::Rect();
             continue;
         }
         cv::inRange(lab_, threshold_lower(input.thresholds[slot]), threshold_upper(input.thresholds[slot]), mask);
@@ -149,47 +156,71 @@ std::array<GateTrackResult, 3> TrackingEngine::track(const TrackInput& input) {
         }
 
         const auto params = resolve_cluster_params(size.width, size.height);
-        const std::optional<float> previous_x = input.previous_positions[slot] ? std::optional<float>(input.previous_positions[slot]->x) : std::nullopt;
-        const std::optional<float> previous_y = input.previous_positions[slot] ? std::optional<float>(input.previous_positions[slot]->y) : std::nullopt;
-        const GateObject object = build_gate_object(components, params, previous_x, previous_y);
-        if (!object.found) {
+        // Legacy prefers the last accepted position as the clustering anchor.
+        const std::optional<cv::Point2f> previous = input.previous_positions[slot]
+            ? input.previous_positions[slot]
+            : (has_last_position_[slot] ? std::optional<cv::Point2f>(last_position_[slot]) : std::nullopt);
+        const GateObject object = build_gate_object(
+            components, params,
+            previous ? std::optional<float>(previous->x) : std::nullopt,
+            previous ? std::optional<float>(previous->y) : std::nullopt);
+
+        // One update per frame, including empty frames: legacy publishes the
+        // last accepted position during the grace period with held=true.
+        const GateStabilityResult published = stability_[slot].update(
+            object.found, object.cx, object.cy, object.radius, object.area, object.members);
+        if (!published.found) {
             continue;
         }
 
         auto& result = results[slot];
         result.found = true;
+        result.held = published.held;
         // Parity with legacy gate_cluster.angle_deg / pi_core::angle_from_center:
         // 0 degrees right, CCW, wrapped into [0, 360). Python `% 360` and the
         // C++ oracle both map negative atan2 results to the positive half circle;
         // without the wrap gates below the center reported negative angles.
-        const float raw_angle = std::atan2(frame_center.y - object.cy,
-                                           object.cx - frame_center.x) *
+        const float raw_angle = std::atan2(frame_center.y - published.cy,
+                                           published.cx - frame_center.x) *
                                 (180.0F / static_cast<float>(kPi));
         float angle = std::fmod(raw_angle, 360.0F);
         if (angle < 0.0F) angle += 360.0F;
         if (angle >= 360.0F) angle -= 360.0F;
         result.angle_deg = angle;
-        result.radius_px = object.radius;
-        result.bbox = (object.bbox.w > 0 && object.bbox.h > 0)
-            ? cv::Rect(cvRound(object.bbox.x), cvRound(object.bbox.y), cvRound(object.bbox.w), cvRound(object.bbox.h))
-            : cv::Rect();
-        const float dx = object.cx - frame_center.x;
-        const float dy = object.cy - frame_center.y;
-        (void)dx;
-        (void)dy;
+        result.radius_px = published.radius;
+        result.bbox = published.held
+            ? last_bbox_[slot]
+            : ((object.bbox.w > 0 && object.bbox.h > 0)
+                ? cv::Rect(cvRound(object.bbox.x), cvRound(object.bbox.y),
+                           cvRound(object.bbox.w), cvRound(object.bbox.h))
+                : cv::Rect());
+        if (!published.held) {
+            last_bbox_[slot] = result.bbox;
+            last_position_[slot] = cv::Point2f(published.cx, published.cy);
+            has_last_position_[slot] = true;
+        }
 
         const float gate_width_cm = 45.0F;
-        const DistResult distance = distance_estimators_[slot].update(object.radius,
+        if (published.held) {
+            // A stale radius must not refresh a reliable distance sample.
+            result.dist_cm = last_dist_cm_[slot];
+            result.dist_reliable = false;
+        } else {
+            const DistResult distance = distance_estimators_[slot].update(published.radius,
                                                                       static_cast<float>(size.width),
                                                                       gate_width_cm);
-        result.dist_cm = distance.cm;
-        result.dist_reliable = distance.reliable;
+            result.dist_cm = distance.cm;
+            result.dist_reliable = distance.reliable;
+            last_dist_cm_[slot] = distance.cm;
+        }
 
-        component_masks_[slot] = cv::Mat::zeros(size, CV_8UC1);
-        if (!result.bbox.empty()) {
-            cv::Mat region = filtered_masks_[slot](result.bbox);
-            cv::Mat out_region = component_masks_[slot](result.bbox);
-            region.copyTo(out_region);
+        if (!published.held) {
+            component_masks_[slot] = cv::Mat::zeros(size, CV_8UC1);
+            if (!result.bbox.empty()) {
+                cv::Mat region = filtered_masks_[slot](result.bbox);
+                cv::Mat out_region = component_masks_[slot](result.bbox);
+                region.copyTo(out_region);
+            }
         }
         result.mask = component_masks_[slot];
     }

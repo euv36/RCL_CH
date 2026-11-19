@@ -2,6 +2,7 @@
 
 #include "self_mask.hpp"
 #include "distance.hpp"
+#include "gate_cluster.hpp"
 
 #include <array>
 #include <optional>
@@ -61,6 +62,11 @@ private:
     std::array<cv::Mat, 3> component_masks_;
     TrackStageTimes last_times_;
     std::array<DistanceEstimator, 3> distance_estimators_{};
+    std::array<GateStability, 3> stability_{};
+    std::array<cv::Rect, 3> last_bbox_{};
+    std::array<cv::Point2f, 3> last_position_{};
+    std::array<bool, 3> has_last_position_{};
+    std::array<float, 3> last_dist_cm_{};
 };
 
 std::array<GateTrackResult, 3> track_gates(TrackInput in);
