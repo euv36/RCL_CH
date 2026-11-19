@@ -6,7 +6,7 @@
 
 ## Why this work exists
 
-`C:\Users\sweetener\Desktop\camera_cpp` already contains a working camera/robot system. It is useful as a behavioral reference, but the current implementation does not provide the maximum possible performance, stability, and maintainability.
+`C:\Users\sweetener\Desktop\camera` already contains a working camera/robot system. It is useful as a behavioral reference, but the current implementation does not provide the maximum possible performance, stability, and maintainability.
 
 This work creates a faster, cleaner, native C++ version of the same system while preserving its current behavior.
 
@@ -15,7 +15,7 @@ This work creates a faster, cleaner, native C++ version of the same system while
 A new project will be created at:
 
 ```text
-C:\Users\sweetener\Desktop\camera_cpp_cpp
+C:\Users\sweetener\Desktop\camera_cpp
 ```
 
 Branch and repository:
@@ -24,7 +24,7 @@ Branch and repository:
 - new git repository
 - local work only by default; GitHub publishing is a separate decision
 
-The original repository at `C:\Users\sweetener\Desktop\camera_cpp` remains untouched and is used only as a reference.
+The original repository at `C:\Users\sweetener\Desktop\camera` remains untouched and is used only as a reference.
 
 ## Required functionality
 
@@ -70,7 +70,7 @@ The native version must preserve the full current feature set:
 
 ## Non-goals
 
-- Do not modify the original `C:\Users\sweetener\Desktop\camera_cpp` repository in place.
+- Do not modify the original `C:\Users\sweetener\Desktop\camera` repository in place.
 - Do not reset or clean its dirty working tree.
 - Do not enable camera auto-exposure.
 - Do not replace full-FOV capture with a cropped fast mode.

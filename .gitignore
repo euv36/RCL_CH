@@ -14,5 +14,13 @@ distance_calib.json
 *.pem
 *.key
 id_ed25519*
+id_rsa*
+id_ecdsa*
 rpi_native_optimization_ed25519*
+*.p12
+*.pfx
+.env*
+.netrc
+known_hosts
+*.log
 secrets*

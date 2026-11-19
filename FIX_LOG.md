@@ -132,3 +132,29 @@ $env:Path='C:\msys64\mingw64\bin;C:\msys64\usr\bin;'+$env:Path
 & 'C:\msys64\mingw64\bin\ctest.exe' --test-dir build-msys2 --output-on-failure
 ```
 Result: configure OK, build OK, `100% tests passed out of 18`. `[VERIFIED]`
+
+---
+
+## Task 2 — Пути документации и шаблоны игнорирования секретов
+
+**Баг / корневая причина**
+- В `docs/spec.md` и `docs/implementation_plan.md` legacy-путь `C:\Users\sweetener\Desktop\camera` был перепутан с путём нового проекта `camera_cpp`; встречался опечаточный путь `camera_cpp_cpp`.
+- Часть строк содержала повреждённые последовательности (`вЂ`, `В°`, `в†’`, `В±`) из-за неправильной кодировки.
+- `.gitignore` не закрывал часто используемые имена приватных ключей и локальных секретов.
+
+**Изменённые файлы**
+- `.gitignore`
+- `docs/spec.md`
+- `docs/implementation_plan.md`
+- `FIX_LOG.md`
+
+**Исправление / оптимизация**
+- Все пути продукта приведены к `C:\Users\sweetener\Desktop\camera_cpp`; legacy-источник обозначен как `C:\Users\sweetener\Desktop\camera`.
+- Удалены все вхождения `camera_cpp_cpp` и повреждённые последовательности; повреждённый фрагмент `никогда не менять исходный проект` теперь ссылается на legacy-репозиторий `camera`.
+- Добавлены ignore-шаблоны `id_rsa*`, `id_ecdsa*`, `*.p12`, `*.pfx`, `.env*`, `.netrc`, `known_hosts`, `*.log`.
+
+**Проверка**
+```powershell
+git diff --check
+```
+Результат: ошибок нет. Поиск по `docs/spec.md` и `docs/implementation_plan.md` не нашёл `camera_cpp_cpp`, `вЂ`, `В°`, `в†’`, `В±`. `[VERIFIED]`

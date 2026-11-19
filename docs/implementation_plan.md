@@ -2,19 +2,19 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. This is a very large project with one shared contract; review each task before starting the next. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a new native C++ full-system replacement at `C:\Users\sweetener\Desktop\camera_cpp_cpp` that is faster, cleaner, and at least as reliable as the current camera/robot project, while leaving `C:\Users\sweetener\Desktop\camera_cpp` as an untouched behavioral reference.
+**Goal:** Build a new native C++ full-system replacement at `C:\Users\sweetener\Desktop\camera_cpp` that is faster, cleaner, and at least as reliable as the current camera/robot project, while leaving `C:\Users\sweetener\Desktop\camera` as an untouched behavioral reference.
 
 **Architecture:** New git repository on branch `native-optimization`. Shared C++17 core under `src/common`, `src/vision`, `src/robot_core`. Native Pi camera service under `src/pi_camera` linked to shared core. Native SDL2 + Dear ImGui laptop application under `src/laptop` linked to shared core. `src/mega_fw` contains a tested protocol-compatible firmware port/build path. Tests live in `tests`; fixtures in `assets/fixtures`; build system CMake + presets.
 
 **Tech Stack:** C++17, CMake, SDL2, Dear ImGui, OpenCV, ZMQ/cppzmq, V4L2, C++ unit tests, Python/C++ parity tools during migration, GitHub Actions-style local CI scripts only if useful, no Python runtime dependency for normal operation.
 
-**Spec:** `C:\Users\sweetener\Desktop\camera_cpp\docs\superpowers\specs\2026-11-18-native-optimization-design.md`
+**Spec:** `C:\Users\sweetener\Desktop\camera\docs\superpowers\specs\2026-11-18-native-optimization-design.md`
 
 ## Global Constraints
 
-- Repository: create `C:\Users\sweetener\Desktop\camera_cpp_cpp` as a **new** git repository; branch `native-optimization`; no commits to `C:\Users\sweetener\Desktop\camera_cpp`; original working tree remains read-only reference (except the already approved root design/plan docs).
-- Capture must remain full-FOV `1920x1080 MJPG`; software downscale/rotation only; never replace with a cropped вЂњfast modeвЂќ.
-- Pi working frame is `640x360`; laptop portrait processed frame is `720x1280`, 90В° CCW like the reference.
+- Repository: create `C:\Users\sweetener\Desktop\camera_cpp` as a **new** git repository; branch `native-optimization`; no commits to `C:\Users\sweetener\Desktop\camera`; original working tree remains read-only reference (except the already approved root design/plan docs).
+- Capture must remain full-FOV `1920x1080 MJPG`; software downscale/rotation only; never replace with a cropped "fast mode".
+- Pi working frame is `640x360`; laptop portrait processed frame is `720x1280`, 90 degrees CCW like the reference.
 - Auto-exposure must never be enabled automatically; invalid camera controls are clamped or rejected with truthful status.
 - No per-pixel hot loops; reuse `cv::Mat` buffers; prefer OpenCV `cvtColor`, `inRange`, morphology, connected components, moments, bitwise ops; no hand-written SIMD unless profiling proves it.
 - Pi has four cores; bounded thread use; no locks around full frame processing.
@@ -29,18 +29,18 @@
 
 ## Review Focus
 
-1. **Corrupt/missing runtime config** в†’ config loader must fall back to defaults and warn, never crash; pinned in Task 3.
-2. **Stale Pi gates / missing `enabled`** в†’ radar/status must not render unconfigured gates even when stale saved state exists; pinned in Tasks 9 and 14.
-3. **Full-FOV/no-AE camera contract** в†’ capture must open `/dev/video0|1` or Windows MSMF camera at 1920x1080 and camera settings must never re-enable AE; pinned in Tasks 10 and 11.
-4. **HSV mask alignment/no warp** в†’ masks align 1:1 with the RGB portrait frame; window resizes keep aspect with letterbox; pinned in Task 14.
-5. **Pi offline / service failed / no ack** в†’ CAM SET must show truthful state rather than falsely вЂњappliedвЂќ; pinned in Task 11 and Task 20.
+1. **Corrupt/missing runtime config** -> config loader must fall back to defaults and warn, never crash; pinned in Task 3.
+2. **Stale Pi gates / missing `enabled`** -> radar/status must not render unconfigured gates even when stale saved state exists; pinned in Tasks 9 and 14.
+3. **Full-FOV/no-AE camera contract** -> capture must open `/dev/video0|1` or Windows MSMF camera at 1920x1080 and camera settings must never re-enable AE; pinned in Tasks 10 and 11.
+4. **HSV mask alignment/no warp** -> masks align 1:1 with the RGB portrait frame; window resizes keep aspect with letterbox; pinned in Task 14.
+5. **Pi offline / service failed / no ack** -> CAM SET must show truthful state rather than falsely "applied"; pinned in Task 11 and Task 20.
 
 ---
 
 ## File Structure
 
 ```text
-C:\Users\sweetener\Desktop\camera_cpp_cpp
+C:\Users\sweetener\Desktop\camera_cpp
   CMakeLists.txt
   CMakePresets.json
   cmake/
@@ -119,21 +119,21 @@ Dependency strategy: prefer `find_package` for OpenCV/ZMQ/SDL2; use vcpkg manife
 ### Task 1: Scaffold new repository and CMake skeleton
 
 **Files:**
-- Create: `C:\Users\sweetener\Desktop\camera_cpp_cpp\CMakeLists.txt`
-- Create: `C:\Users\sweetener\Desktop\camera_cpp_cpp\CMakePresets.json`
-- Create: `C:\Users\sweetener\Desktop\camera_cpp_cpp\cmake\Dependencies.cmake`
-- Create: `C:\Users\sweetener\Desktop\camera_cpp_cpp\cmake\Warnings.cmake`
-- Create: `C:\Users\sweetener\Desktop\camera_cpp_cpp\.gitignore`
-- Create: `C:\Users\sweetener\Desktop\camera_cpp_cpp\README.md`
-- Create: `C:\Users\sweetener\Desktop\camera_cpp_cpp\src\common\.gitkeep`
-- Create: `C:\Users\sweetener\Desktop\camera_cpp_cpp\tests\.gitkeep`
+- Create: `C:\Users\sweetener\Desktop\camera_cpp\CMakeLists.txt`
+- Create: `C:\Users\sweetener\Desktop\camera_cpp\CMakePresets.json`
+- Create: `C:\Users\sweetener\Desktop\camera_cpp\cmake\Dependencies.cmake`
+- Create: `C:\Users\sweetener\Desktop\camera_cpp\cmake\Warnings.cmake`
+- Create: `C:\Users\sweetener\Desktop\camera_cpp\.gitignore`
+- Create: `C:\Users\sweetener\Desktop\camera_cpp\README.md`
+- Create: `C:\Users\sweetener\Desktop\camera_cpp\src\common\.gitkeep`
+- Create: `C:\Users\sweetener\Desktop\camera_cpp\tests\.gitkeep`
 
 **Interfaces:**
 - Produces: a configureable CMake workspace before any product code exists. Target `kCameraCppSmoke` compiles a trivial `src/common/smoke.cpp` returning 0.
 
 - [ ] **Step 1: Initialize repository**
 
-Run: `git init -b native-optimization` in `C:\Users\sweetener\Desktop\camera_cpp_cpp`; record `git status --short`.
+Run: `git init -b native-optimization` in `C:\Users\sweetener\Desktop\camera_cpp`; record `git status --short`.
 
 - [ ] **Step 2: Write `.gitignore`**
 
@@ -163,13 +163,13 @@ git commit -m "chore: scaffold native project"
 ### Task 2: Seed local runtime data and spec/plan copies without secrets
 
 **Files:**
-- Create: `C:\Users\sweetener\Desktop\camera_cpp_cpp\local\README.md`
-- Create: `C:\Users\sweetener\Desktop\camera_cpp_cpp\local\saved_gates.json`
-- Create: `C:\Users\sweetener\Desktop\camera_cpp_cpp\local\camera_settings.json`
-- Create: `C:\Users\sweetener\Desktop\camera_cpp_cpp\local\field_map.json`
-- Create: `C:\Users\sweetener\Desktop\camera_cpp_cpp\local\distance_calib.json`
-- Create: `C:\Users\sweetener\Desktop\camera_cpp_cpp\docs\spec.md`
-- Create: `C:\Users\sweetener\Desktop\camera_cpp_cpp\docs\implementation_plan.md`
+- Create: `C:\Users\sweetener\Desktop\camera_cpp\local\README.md`
+- Create: `C:\Users\sweetener\Desktop\camera_cpp\local\saved_gates.json`
+- Create: `C:\Users\sweetener\Desktop\camera_cpp\local\camera_settings.json`
+- Create: `C:\Users\sweetener\Desktop\camera_cpp\local\field_map.json`
+- Create: `C:\Users\sweetener\Desktop\camera_cpp\local\distance_calib.json`
+- Create: `C:\Users\sweetener\Desktop\camera_cpp\docs\spec.md`
+- Create: `C:\Users\sweetener\Desktop\camera_cpp\docs\implementation_plan.md`
 
 **Interfaces:**
 - Produces: gitignored local seed directory. Runtime code reads `local/` first, then defaults; git never contains these files.
@@ -180,7 +180,7 @@ Use the approved design text and this plan, unchanged except path references upd
 
 - [ ] **Step 2: Copy runtime contract files into `local/`**
 
-Copy from `C:\Users\sweetener\Desktop\camera_cpp\UniKostyl\saved_gates.json`, `camera_settings.json`, `field_map.json`, `distance_calib.json` if present. If absent, write an empty valid placeholder using the old contracts (`{"version":1,"gates":{}}`).
+Copy from `C:\Users\sweetener\Desktop\camera\UniKostyl\saved_gates.json`, `camera_settings.json`, `field_map.json`, `distance_calib.json` if present. If absent, write an empty valid placeholder using the old contracts (`{"version":1,"gates":{}}`).
 
 - [ ] **Step 3: Verify ignored**
 
@@ -228,7 +228,7 @@ Use `.tmp.<pid>.<counter>` in same directory, `std::ofstream`, `flush`, fsync wh
 
 - [ ] **Step 4: Implement JSON config helpers**
 
-`read_json_file`: valid JSON в†’ object; invalid/empty/missing в†’ `std::nullopt` and non-throwing warning. Unknown keys are never dropped by helper rewrite functions; only explicit typed upserts may modify owned keys.
+`read_json_file`: valid JSON -> object; invalid/empty/missing -> `std::nullopt` and non-throwing warning. Unknown keys are never dropped by helper rewrite functions; only explicit typed upserts may modify owned keys.
 
 - [ ] **Step 5: Add contracts header**
 
@@ -303,11 +303,11 @@ git commit -m "build: gate laptop UI dependencies"
 
 - [ ] **Step 1: Write failing tests for known colors**
 
-Black/white/green/red/yellow/blue/orange LAB vectors from Python reference. Tolerance В±1 for 8-bit conversion; exact parity test for `lab_in_range`.
+Black/white/green/red/yellow/blue/orange LAB vectors from Python reference. Tolerance +/-1 for 8-bit conversion; exact parity test for `lab_in_range`.
 
 - [ ] **Step 2: Inspect reference formulas**
 
-Read `C:\Users\sweetener\Desktop\camera_cpp\UniKostyl\unikostyl.py` sections `rgb2lab`, `lab_to_rgb`, `threshold_filter`, and tests in `out/mask_check.py`; record any non-obvious constant in comments.
+Read `C:\Users\sweetener\Desktop\camera\UniKostyl\unikostyl.py` sections `rgb2lab`, `lab_to_rgb`, `threshold_filter`, and tests in `out/mask_check.py`; record any non-obvious constant in comments.
 
 - [ ] **Step 3: Implement minimal conversion and range test**
 
@@ -436,15 +436,15 @@ git commit -m "feat(vision): port self-mask and distance models"
 
 - [ ] **Step 1: Write failing tests for zero configured gates**
 
-All thresholds defaulted/unconfigured в†’ three results disabled/not found; no masks exported; no crash on null frame.
+All thresholds defaulted/unconfigured -> three results disabled/not found; no masks exported; no crash on null frame.
 
 - [ ] **Step 2: Write failing tests for one configured gate**
 
-Synthetic scene with a bright gate-colored rectangle yields `enabled=true`, `found=true`; mask has same shape as input; angle convention matches reference (0В° right, CCW); bbox centered on fixture.
+Synthetic scene with a bright gate-colored rectangle yields `enabled=true`, `found=true`; mask has same shape as input; angle convention matches reference (0 degrees right, CCW); bbox centered on fixture.
 
 - [ ] **Step 3: Port LAB mask path**
 
-Convert RGBв†’LAB, threshold three channels with `cv::inRange`/`bitwise_and`, apply self-mask, run connected components, clustering from Task 6. Reuse Mats as members of `TrackingEngine`.
+Convert RGB->LAB, threshold three channels with `cv::inRange`/`bitwise_and`, apply self-mask, run connected components, clustering from Task 6. Reuse Mats as members of `TrackingEngine`.
 
 - [ ] **Step 4: Add stage timings**
 
@@ -566,7 +566,7 @@ Multipart shape is `[JPEG, JSON]`; JSON has FPS, gates array, source/status fiel
 
 - [ ] **Step 2: Write camera-apply tests with mocked backend**
 
-Clamping works; unknown control rejected with `n/a`; AE is forced manual; readback mismatch reported truthfully; no silent вЂњokвЂќ.
+Clamping works; unknown control rejected with `n/a`; AE is forced manual; readback mismatch reported truthfully; no silent "ok".
 
 - [ ] **Step 3: Implement ZMQ listeners**
 
@@ -639,7 +639,7 @@ git commit -m "docs(pi): add temporary native smoke procedure"
 **Interfaces:**
 - Produces:
   - `struct AppState { std::string camera_source_text="10.132.122.51"; bool input_active=false; enum class SourceKind { Local, Pi, None } source_kind=SourceKind::None; std::string pi_status_summary; double fps_ui=0; };`
-  - `std::string paste_text_from_clipboard();` using SDL2 clipboard; strips NUL/control/non-printable except newlineв†’trimmed; caps 256 chars.
+  - `std::string paste_text_from_clipboard();` using SDL2 clipboard; strips NUL/control/non-printable except newline->trimmed; caps 256 chars.
   - `ConnectRequest parse_connect(text)` supporting `local`, integer camera index, IPv4/hostname:port optional; invalid text yields inline error, not crash.
 
 - [ ] **Step 1: Write clipboard tests**
@@ -849,7 +849,7 @@ Include Pi compiler versions, warnings, skipped items.
 - Modify: `docs/VERIFICATION.md`
 
 **Interfaces:**
-- Produces: bounded 45вЂ“60 second local camera smoke with screenshot and logs.
+- Produces: bounded 45-60 second local camera smoke with screenshot and logs.
 
 - [ ] **Step 1: Launch app with local source auto-detect**
 
@@ -865,7 +865,7 @@ Toggle HSV MASK/INFO; verify windows/menus open/close; do not change physical ro
 
 - [ ] **Step 4: Record result**
 
-If not verified, mark FAILED/BLOCKED in `VERIFICATION.md`, not вЂњdoneвЂќ.
+If not verified, mark FAILED/BLOCKED in `VERIFICATION.md`, not "done".
 
 ---
 
