@@ -607,3 +607,33 @@ python tests/integration/pi_service_smoke.py --host 10.132.122.51 --duration 5 -
 Результат: SSH OK; сборка на Pi без ошибок; оба smoke-запуска `ok=true`; сервис оставлен запущенным для дальнейших тестов пользователя. `[VERIFIED ON HARDWARE]`
 
 CAM SET с физическим изменением настроек камеры, остановка сервиса и восстановление конфигов не выполнялись — пользователь может сделать это отдельно. Сон ноутбука не выполнялся.
+
+---
+
+## Serial-мост робота в нативном camera_service
+
+**Баг / корневая причина**
+- Нативный `camera_service` не взаимодействовал с роботом: в логе значилось `serial link: not managed by this service`, хотя legacy `rpi_elp_cam.py` отправлял команды ворот и heartbeat на Arduino через `/dev/serial0`.
+- Arduino физически отключён, поэтому мост должен включаться только при реально доступном порту и не мешать работе сервиса без робота.
+
+**Изменённые файлы**
+- `src/pi_camera/serial_link.hpp/.cpp` (новые)
+- `src/pi_camera/service_main.cpp`
+- `tests/pi_camera/serial_link_test.cpp` (новый)
+- `tests/integration/pi_zmq_loopback_test.cpp`
+- `src/CMakeLists.txt`
+- `FIX_LOG.md`
+
+**Исправление / оптимизация**
+- Реализован `update_gate_serial()` с байт-паритетом legacy: первая детекция отправляется сразу, повтор — при изменении угла ≥3° (с учётом перехода 0/360) и не чаще 0.10 с; потеря ворот шлёт `G<id>,-1,0\n` один раз. Угол нормализуется в `[0,360)`, площадь ограничивается `0..1e9`.
+- `SerialLink` открывает UART 115200 (8N1, без блокировки) только если порт существует и мост явно не отключён; при отсутствии Arduino объект неактивен, все записи безопасно игнорируются.
+- В `service_main.cpp` добавлен `--serial <path>` (по умолчанию `/dev/serial0`), флаг `--no-serial` сохранён как явное отключение. При отсутствии порта выводится предупреждение `robot bridge disabled`, а не ошибка. В цикле после `statuses` шлются команды ворот и heartbeat `HB\n` каждые 0.5 с; в конце вызывается `close()`.
+- TDD: тест `serial_link` сначала RED (нет заголовка/исходника), затем GREEN. Интеграционный loopback-тест проверяет, что при несуществующем порту сервис стартует и логирует отключение моста.
+
+**Проверка**
+```powershell
+$env:Path = 'C:\msys64\mingw64\bin;C:\msys64\usr\bin;' + $env:Path
+& 'C:\msys64\mingw64\bin\ctest.exe' --test-dir build-msys2 -R '^(serial_link|pi_zmq_loopback)$' --output-on-failure
+```
+Результат: `serial_link` Passed (0.01 sec), `pi_zmq_loopback` Passed (10.74 sec), 2/2. Полный набор: `100% tests passed out of 30`, 14.02 sec, сборка без предупреждений. `[VERIFIED]`
+Отправка реальных команд на Arduino не проверялась — порт физически отключён. `[UNVERIFIED ON HARDWARE]`

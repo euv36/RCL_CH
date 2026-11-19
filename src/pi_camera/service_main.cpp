@@ -1,6 +1,7 @@
 #include "camera_engine.hpp"
 #include "cam_settings.hpp"
 #include "color_listener.hpp"
+#include "serial_link.hpp"
 #include "status_builder.hpp"
 
 #include <algorithm>
@@ -169,9 +170,10 @@ void print_usage() {
     std::cout << "Usage: camera_service [--laptop-ip <ip>] [--device <path>] [--port-video <port>] "
               << "[--port-colors <port>] [--cam-settings-port <port>] [--bind-host <host>] "
               << "[--self-mask-cx <0-1>] [--self-mask-cy <0-1>] [--self-mask-r <0-1>] "
-              << "[--self-mask-r2 <0-1>] [--self-mask-enabled] [--no-serial] [--once]\n";
+              << "[--self-mask-r2 <0-1>] [--self-mask-enabled] [--serial <path>] [--no-serial] [--once]\n";
     std::cout << "  --laptop-ip         Legacy address; this service only publishes and never connects to it.\n";
-    std::cout << "  --no-serial         Do not use a robot serial link (this service never opens one).\n";
+    std::cout << "  --serial <path>     Arduino UART path (default /dev/serial0); silently skipped if absent.\n";
+    std::cout << "  --no-serial         Disable the robot serial link even if the port exists.\n";
     std::cout << "  --port-video        Video/status publish port (default 5555).\n";
     std::cout << "  --port-colors       Gate color listener port (default 5557).\n";
     std::cout << "  --cam-settings-port CAM SET listener port (default 5559).\n";
@@ -283,6 +285,7 @@ int main(int argc, char** argv) {
     using namespace camera_cpp;
 
     std::string device = "/dev/video0";
+    std::string serial_port = "/dev/serial0";
     std::string laptop_ip = "10.132.122.120";
     std::string bind_host = "*";
     std::string gates_file;
@@ -314,6 +317,8 @@ int main(int argc, char** argv) {
             return 0;
         } else if (arg == "--device") {
             device = need_value("--device");
+        } else if (arg == "--serial") {
+            serial_port = need_value("--serial");
         } else if (arg == "--laptop-ip") {
             laptop_ip = need_value("--laptop-ip");
         } else if (arg == "--bind-host") {
@@ -380,7 +385,19 @@ int main(int argc, char** argv) {
         max_frames = 1;
     }
     std::cout << "laptop-ip (publish-only, never connected): " << laptop_ip << std::endl;
-    std::cout << "serial link: " << (no_serial ? "disabled by --no-serial" : "not managed by this service") << std::endl;
+
+    // Arduino может быть физически отключён: отсутствие порта не считается ошибкой.
+    const bool serial_present = serial_port_available(serial_port);
+    const bool serial_enabled = !no_serial && serial_present;
+    if (no_serial) {
+        std::cout << "serial link: disabled by --no-serial" << std::endl;
+    } else if (!serial_present) {
+        std::cerr << "warning: serial port " << serial_port
+                  << " not found; robot bridge disabled" << std::endl;
+    } else {
+        std::cout << "serial link: " << serial_port << std::endl;
+    }
+    SerialLink robot_link(serial_port, serial_enabled);
 
     GuardedGateStore gates;
     const auto saved_path = gates_file.empty() ? contract_path("saved_gates.json") : std::filesystem::path(gates_file);
@@ -459,7 +476,10 @@ int main(int argc, char** argv) {
     TrackInput track_input;
     track_input.self_mask = self_mask;
 
-    auto previous = std::chrono::steady_clock::now();
+    std::array<GateSerialState, 3> serial_states{};
+    const auto service_started = std::chrono::steady_clock::now();
+    auto last_heartbeat = service_started;
+    auto previous = service_started;
     auto next_frame = previous;
     float fps = 0.0F;
     int frames_processed = 0;
@@ -520,6 +540,22 @@ int main(int argc, char** argv) {
             };
         }
 
+        // Робот получает команды только при реально подключённом Arduino.
+        if (robot_link.connected()) {
+            const double serial_seconds = std::chrono::duration<double>(now - service_started).count();
+            for (std::size_t index = 0; index < statuses.size(); ++index) {
+                const auto& gate = statuses[index];
+                const auto command = update_gate_serial(serial_states[index], gate.id,
+                                                        gate.found, gate.angle_deg,
+                                                        gate.area_px, serial_seconds);
+                if (command.send) robot_link.write(command.line);
+            }
+            if (std::chrono::duration<double>(now - last_heartbeat).count() >= 0.5) {
+                robot_link.write("HB\n");
+                last_heartbeat = now;
+            }
+        }
+
         const auto status = StatusBuilder{}.build(statuses, fps, {640, 360}, "pi");
         if (publish_status_video(publisher, frame.processing_frame, status)) {
             ++frames_published;
@@ -563,6 +599,7 @@ int main(int argc, char** argv) {
         std::this_thread::sleep_until(next_frame);
     }
 
+    robot_link.close();
     zmq_close(publisher);
     zmq_ctx_term(context);
     engine.close();

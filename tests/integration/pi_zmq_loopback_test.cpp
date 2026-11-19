@@ -105,6 +105,7 @@ int main() {
         " --port-video 15555 --port-colors 15557 --cam-settings-port 15559"
         " --fake-v4l2-log \"" + v4l2_log.string() + "\""
         " --gates-file \"" + gates_file.string() + "\""
+        " --serial \"" + (dir / "missing_uart").string() + "\""
         " --test-ready-file \"" + ready.string() + "\""
         " --test-state-file \"" + state.string() + "\""
         " --frame-delay-ms 50 --max-frames 200"
@@ -121,6 +122,7 @@ int main() {
                   << std::endl;
     }
     CAMERA_TEST_CHECK(wait_for_file(ready, 1000));
+    CAMERA_TEST_CHECK(wait_for_text(service_log, "robot bridge disabled", 2000));
     void* context = zmq_ctx_new();
     CAMERA_TEST_CHECK(context != nullptr);
 

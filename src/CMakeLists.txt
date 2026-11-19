@@ -65,6 +65,7 @@ endif()
 add_library(camera_pi_logic STATIC
   pi_camera/status_builder.cpp
   pi_camera/cam_settings.cpp
+  pi_camera/serial_link.cpp
 )
 target_link_libraries(camera_pi_logic PUBLIC camera_common)
 target_include_directories(camera_pi_logic PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/pi_camera ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/common ${PROJECT_SOURCE_DIR}/third_party)
@@ -76,6 +77,10 @@ add_test(NAME status_builder COMMAND kCameraCppStatusBuilderTest)
 add_executable(kCameraCppCamSettingsTest ../tests/pi_camera/cam_settings_test.cpp)
 target_link_libraries(kCameraCppCamSettingsTest PRIVATE camera_pi_logic)
 add_test(NAME cam_settings COMMAND kCameraCppCamSettingsTest)
+
+add_executable(kCameraCppSerialLinkTest ../tests/pi_camera/serial_link_test.cpp)
+target_link_libraries(kCameraCppSerialLinkTest PRIVATE camera_pi_logic)
+add_test(NAME serial_link COMMAND kCameraCppSerialLinkTest)
 
 if(CAMERA_CPP_HAS_ZMQ)
 add_library(camera_pi_zmq STATIC
