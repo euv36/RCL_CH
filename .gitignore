@@ -28,3 +28,5 @@ known_hosts
 imgui.ini
 secrets*
 camera_ui.exe
+*.dll
+platforms/
