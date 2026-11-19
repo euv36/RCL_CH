@@ -637,3 +637,20 @@ $env:Path = 'C:\msys64\mingw64\bin;C:\msys64\usr\bin;' + $env:Path
 ```
 Результат: `serial_link` Passed (0.01 sec), `pi_zmq_loopback` Passed (10.74 sec), 2/2. Полный набор: `100% tests passed out of 30`, 14.02 sec, сборка без предупреждений. `[VERIFIED]`
 Отправка реальных команд на Arduino не проверялась — порт физически отключён. `[UNVERIFIED ON HARDWARE]`
+
+---
+
+## Запуск camera_service без Arduino 2026-11-19
+
+**Цель**
+- Запустить сервис на Pi без физически подключённого Arduino, чтобы robot-код не выполнялся.
+
+**Действия**
+- Исходники `aa576cd` (с serial-мостом) упакованы в `git archive` и распакованы в `/tmp/camera_cpp_noserial`; собран `camera_service` (OpenCV 4.10.0, libzmq, без laptop-целей).
+- Старый сервис (PID 1537) остановлен. Новый запущен с флагом `--no-serial` (PID 2056), порты 5555/5557/5559 на `10.132.122.51`.
+
+**Проверка**
+- В логе: `serial link: disabled by --no-serial` — robot-код не активируется; `/dev/serial0` не открывался.
+- `ss -ltn` подтверждает прослушивание 5555/5557/5559.
+- Smoke с ноутбука: `ok=true`, `messages=1`, `valid_jpeg=1`, `valid_json=1`, `fps≈9.8`, `frame_wh=[640,360]`, `src=pi`. `[VERIFIED ON HARDWARE]`
+- Прошивка и последовательный порт не трогались; сон ноутбука не выполнялся.
