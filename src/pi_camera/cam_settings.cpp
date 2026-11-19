@@ -60,6 +60,8 @@ bool ApplyReport::ok() const {
 
 CamSettings::CamSettings(std::shared_ptr<CommandRunner> runner) : runner_(std::move(runner)) {}
 
+// Применяет управления камерой через v4l2-ctrl и считывает фактические значения.
+// auto_exposure принудительно остаётся 1, попытки выключить его отклоняются.
 ApplyReport CamSettings::apply_controls(const std::string& device, const std::unordered_map<std::string, int>& controls) const {
     ApplyReport report;
     if (!runner_) {

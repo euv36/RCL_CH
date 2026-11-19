@@ -185,6 +185,8 @@ std::string sanitize_utf8(std::string_view text) {
 
 } // namespace
 
+// Очищает данные буфера обмена: UTF-16 переводится в UTF-8, битые последовательности отбрасываются.
+// Результат безопасен для вставки в текстовое поле CONNECT.
 std::string sanitize_clipboard_bytes(std::string_view raw) {
     if (raw.empty()) {
         return {};

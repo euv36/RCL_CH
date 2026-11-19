@@ -180,5 +180,20 @@ int main() {
     CAMERA_TEST_CHECK(no_fps_report.warning.find("did not report FPS") != std::string::npos);
     CAMERA_TEST_CHECK(no_fps.negotiated_config().fps == 30);
 
+    // Повторное чтение через read_reusing обязано переиспользовать буфер
+    // обработанного кадра: закреплённый Mat-заголовок удерживает старую память,
+    // поэтому новая аллокация изменила бы указатель данных.
+    auto reuse_backend = std::make_unique<FakeBackend>();
+    CameraEngine reuse_engine(std::move(reuse_backend));
+    CAMERA_TEST_CHECK(reuse_engine.open({}, nullptr));
+    camera_cpp::EngineFrame reuse_frame;
+    CAMERA_TEST_CHECK(reuse_engine.read_reusing(reuse_frame));
+    cv::Mat pinned_processing = reuse_frame.processing_frame;
+    CAMERA_TEST_CHECK(reuse_engine.read_reusing(reuse_frame));
+    CAMERA_TEST_CHECK(reuse_frame.processing_frame.data == pinned_processing.data);
+    CAMERA_TEST_CHECK(reuse_frame.processing_frame.size() == cv::Size(640, 360));
+    CAMERA_TEST_CHECK(reuse_engine.read_reusing(reuse_frame));
+    CAMERA_TEST_CHECK(reuse_frame.processing_frame.data == pinned_processing.data);
+
     return 0;
 }

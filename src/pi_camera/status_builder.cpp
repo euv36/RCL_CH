@@ -24,6 +24,8 @@ float non_negative(float value) {
 
 } // namespace
 
+// Собирает статус для планировщика в формате legacy wire-контракта.
+// Отключённые ворота не публикуют found/held/площадь/расстояние.
 nlohmann::json StatusBuilder::build(const std::array<GateStatus, 3>& gates,
                                     float fps,
                                     std::array<int, 2> frame_size,

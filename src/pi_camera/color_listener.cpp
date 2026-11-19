@@ -214,6 +214,8 @@ std::optional<std::string> receive(void* socket) {
 ColorListener::ColorListener(int bind_port) : bind_port_(bind_port) {}
 ColorListener::~ColorListener() { shutdown(); }
 
+// Поднимает ZMQ SUB на порту цветов и запускает фоновый поток приёма.
+// Все обновления GateStore защищаются общим мьютексом с основным циклом.
 bool ColorListener::start(GateStore& store, const std::string& bind_host, std::mutex* store_mutex) {
     shutdown();
     stop_.store(false);
@@ -235,6 +237,8 @@ void ColorListener::shutdown() {
     store_mutex_ = nullptr;
 }
 
+// Разбирает legacy JSON цветов ворот и применяет его к хранилищу.
+// Неизвестные поля игнорируются, ошибка возвращается через error.
 bool ColorListener::update_from_json(const std::string& json_text, GateStore& store, std::string* error) const {
     try {
         const auto root = nlohmann::json::parse(json_text);
@@ -292,6 +296,8 @@ std::string CamSettingsListener::last_message() const {
     return last_message_;
 }
 
+// Проверяет команду set из JSON и сохраняет последние управления для UI.
+// Поле auto_exposure не принимается от клиента: Pi задаёт его сам.
 bool CamSettingsListener::set_last_message(const std::string& json_text, std::string* controls_json) const {
     std::string captured = json_text;
     {

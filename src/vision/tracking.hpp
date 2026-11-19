@@ -53,6 +53,9 @@ public:
     std::array<GateTrackResult, 3> track(const TrackInput& input);
     TrackStageTimes last_stage_ms() const noexcept;
     std::size_t cache_footprint_bytes() const noexcept;
+    // Диагностический доступ к кэшированной маске компонента ворот.
+    // Содержимое переиспользуется между кадрами и действительно до следующего вызова track().
+    const cv::Mat& component_mask(std::size_t slot) const noexcept;
 
 private:
     cv::Mat lab_;

@@ -211,6 +211,8 @@ bool read_int_in_range(const std::string& text, int low, int high, int& value) {
     }
 }
 
+// Кодирует кадр в JPEG и отправляет двухчастный ZMQ-пакет: JPEG + JSON статуса.
+// Первая часть помечается SNDMORE, вторая содержит status.dump().
 bool publish_status_video(void* socket, const cv::Mat& frame, const nlohmann::json& status) {
     std::vector<unsigned char> jpeg;
     if (!cv::imencode(".jpg", frame, jpeg, {cv::IMWRITE_JPEG_QUALITY, 90})) {
@@ -234,10 +236,12 @@ bool publish_status_video(void* socket, const cv::Mat& frame, const nlohmann::js
 
 // GateStore stores legacy CIELAB (L 0..100, a/b -128..127); TrackingEngine
 // thresholds are raw OpenCV 8-bit Lab (L 0..255, a/b 0..255 with 128 neutral).
+// Переводит legacy L в диапазон 0..255 8-битного OpenCV Lab.
 int lab_l_to_u8(int value) {
     return std::clamp(static_cast<int>(std::lround(value * 255.0 / 100.0)), 0, 255);
 }
 
+// Переводит legacy a/b в диапазон 0..255 со сдвигом на 128 (нейтральный канал).
 int lab_ab_to_u8(int value) {
     return std::clamp(static_cast<int>(std::lround(value + 128.0)), 0, 255);
 }
@@ -462,8 +466,8 @@ int main(int argc, char** argv) {
     int frames_published = 0;
 
     while (max_frames == 0 || frames_processed < max_frames) {
-        const auto frame = engine.read();
-        if (!frame) {
+        camera_cpp::EngineFrame frame;
+        if (!engine.read_reusing(frame)) {
             std::cerr << "camera read failed" << std::endl;
             break;
         }
@@ -476,7 +480,7 @@ int main(int argc, char** argv) {
             const float instantaneous = static_cast<float>(1.0 / seconds);
             fps = fps == 0.0F ? instantaneous : fps * 0.82F + instantaneous * 0.18F;
         }
-        track_input.portrait_rgb = &frame->processing_frame;
+        track_input.portrait_rgb = &frame.processing_frame;
 
         // Snapshot shared state once per frame. No lock is held during tracking.
         std::array<std::string, 3> roles{};
@@ -517,7 +521,7 @@ int main(int argc, char** argv) {
         }
 
         const auto status = StatusBuilder{}.build(statuses, fps, {640, 360}, "pi");
-        if (publish_status_video(publisher, frame->processing_frame, status)) {
+        if (publish_status_video(publisher, frame.processing_frame, status)) {
             ++frames_published;
         }
 

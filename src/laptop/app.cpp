@@ -29,6 +29,8 @@ bool is_paste_shortcut(const SDL_Event& event, const AppState& state) {
 
 } // namespace
 
+// Главный цикл SDL2/ImGui: создаёт окно, обрабатывает события и рисует оболочку.
+// GUI запускается только пользователем; в автоматических тестах цикл не вызывается.
 int App::run() {
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS) != 0) {
         std::cerr << "SDL_Init failed: " << SDL_GetError() << '\n';

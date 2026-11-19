@@ -2,6 +2,7 @@
 
 namespace camera_cpp::laptop {
 
+// Возвращает разделы справки INFO на русском в порядке upper row -> details.
 const std::vector<HelpSection>& HelpRu::sections() {
     static const std::vector<HelpSection> kSections{
         {"main", "Главное", {

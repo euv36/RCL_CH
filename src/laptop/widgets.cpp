@@ -273,6 +273,8 @@ void draw_help(AppState& state) {
     }
 }
 
+// Рисует всю оболочку: верхний ряд кнопок, видео, панели ворот и статус.
+// Раскладка берётся из чистой compute_ui_layout и не зависит от состояния ImGui.
 void draw_shell(AppState& state) {
     const ImVec2 display = ImGui::GetIO().DisplaySize;
     const UiLayout layout = compute_ui_layout(display.x, display.y);

@@ -87,6 +87,8 @@ std::string iso_local_timestamp() {
 
 } // namespace
 
+// Загружает ворота из JSON; неизвестные ключи сохраняются в original_.
+// Это позволяет переживать запись конфига старой версией программы без потерь.
 bool GateStore::load(const std::string& path) {
     path_ = path;
     root_ = nlohmann::json::object({{"version", kVersion}, {"gates", nlohmann::json::object()}});
@@ -178,6 +180,8 @@ std::optional<GateRecord> GateStore::parse_record(const nlohmann::json& gate) {
     return record;
 }
 
+// Атомарно сохраняет ворота, сливая известные поля с неизвестными из original_.
+// Неизвестные ключи конфига не теряются при записи новой версии.
 bool GateStore::save_atomic() const {
     nlohmann::json payload = nlohmann::json::object();
     nlohmann::json gates = nlohmann::json::object();

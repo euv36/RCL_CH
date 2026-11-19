@@ -493,3 +493,49 @@ $env:Path = 'C:\msys64\mingw64\bin;C:\msys64\usr\bin;' + $env:Path
 & 'C:\msys64\mingw64\bin\ctest.exe' --test-dir build-msys2 --output-on-failure
 ```
 Результат: configure OK, сборка 100% без предупреждений, `camera_laptop_ui.exe` собирается, `100% tests passed out of 27`, 13.81 sec; новые `help_ru`, `hsv_panel`, `layout_smoke`, `radar_panel`, `cam_settings_panel`, `theme` — Passed. `[VERIFIED]` Скриншот на SDL dummy driver и живой GUI НЕ выполнялись (dummy не даёт OpenGL/ImGui) — отложено до Task 19; PUB-отправка на Pi проверена только статикой/контрактом: `[UNVERIFIED ON HARDWARE]`.
+
+---
+
+## Оптимизация горячего пути и проверка на локальной камере
+
+**Баг / корневая причина**
+- `downscale_and_rotate(full_frame)` выделяла новый `cv::Mat` 640x360 на каждый кадр Pi; `CameraEngine::read()` добавляла ещё одну аллокацию рабочего кадра.
+- `TrackingEngine::track()` каждый кадр создавал `cv::Mat::zeros` для маски компонента, хотя размер маски постоянный.
+- В коде отсутствовали headless-проба локальной камеры и русские описания ключевых функций.
+
+**Изменённые файлы**
+- `src/pi_camera/v4l2_capture.hpp/.cpp`, `src/pi_camera/camera_engine.hpp/.cpp`, `src/pi_camera/service_main.cpp`
+- `src/vision/tracking.hpp/.cpp`, `tests/pi_camera/downscale_reuse_test.cpp`, `tests/pi_camera/capture_config_test.cpp`, `tests/vision/tracking_test.cpp`
+- `tools/local_camera_probe.cpp` (новый), `src/CMakeLists.txt`
+- `src/common/{atomic_file,json_config,paths,gate_store,field_map,cam_settings_config}.cpp`
+- `src/vision/{self_mask,distance,gate_cluster}.cpp`
+- `src/pi_camera/{status_builder,cam_settings,color_listener}.cpp`
+- `src/laptop/{app,hsv_panel,help_ru,panels,source_controller,clipboard_text,widgets}.cpp`
+- `FIX_LOG.md`
+
+**Исправление / оптимизация**
+- Добавлена перегрузка `downscale_and_rotate(const cv::Mat&, cv::Mat&)` с переиспользованием буфера; старая обёртка сохранена для совместимости.
+- `CameraEngine::read_reusing(EngineFrame&)` переиспользует `processing_buffer_`; `read()` оставляет прежнюю семантику; `close()` освобождает буфер. Основной цикл `camera_service` переведён на `read_reusing`.
+- `TrackingEngine::component_mask(slot)` отдаёт const-ссылку на кэшированную маску; `create()` вызывается только при смене размера/типа, затем `setTo(0)`.
+- TDD: каждая оптимизация сначала RED (отсутствующий метод), затем минимальный GREEN; новые проверки стабильности указателя данных и неизменности результата.
+- Добавлен headless `local_camera_probe` (без GUI/ZMQ/SSH): локальная USB-камера -> 640x360 -> портрет 720x1280 -> `TrackingEngine`. Цель собрана, но НЕ зарегистрирована в ctest, чтобы не требовать железо в CI.
+- Добавлены русские описания ключевых функций в common/vision/pi_camera/laptop; англоязычные вкрапления в комментариях устранены.
+
+**Проверка**
+```powershell
+$env:Path = 'C:\msys64\mingw64\bin;C:\msys64\usr\bin;' + $env:Path
+& 'C:\msys64\mingw64\bin\cmake.exe' -S . -B build-msys2
+& 'C:\msys64\mingw64\bin\cmake.exe' --build build-msys2
+& 'C:\msys64\mingw64\bin\ctest.exe' --test-dir build-msys2 --output-on-failure
+```
+Результат: configure OK, сборка 100% без предупреждений, `100% tests passed out of 28`, 14.50 sec; `camera_laptop_ui.exe` и `local_camera_probe.exe` собираются. `[VERIFIED]`
+
+Headless-проба локальных камер (без Pi, без GUI):
+```powershell
+$env:Path = 'C:\msys64\mingw64\bin;' + $env:Path
+& '.\build-msys2\src\local_camera_probe.exe' --index 0 --frames 30 --width 1920 --height 1080 --fps 30
+& '.\build-msys2\src\local_camera_probe.exe' --index 1 --frames 30 --width 1920 --height 1080 --fps 30
+```
+Результат index 0 (`HP HD Camera`): `negotiated=1280x720 fps=30`, 30/30 кадров, 31.3 fps, stage cvt=3.67 mask=1.12 cc=5.48 cluster=0.00 total=10.27 ms, processing=640x360 portrait=720x1280, gates_found=0. Результат index 1 (`HD USB Camera`): `negotiated=1920x1080 fps=30`, 30/30 кадров, 4.79 fps (ограничение USB/железа, не кода), stage total=8.71 ms, gates_found=0. Оба выхода 0. Жёлтых ворот в комнате нет, поэтому `gates_found=0` ожидаемо. `[VERIFIED ON LOCAL CAMERA]`
+
+Все утверждения про Pi, live-камеру и прошивку остаются `[UNVERIFIED ON HARDWARE]`: Pi не подключался, SSH/сетевые пробы не выполнялись. Сон ноутбука не выполнялся.

@@ -21,6 +21,8 @@ DistResult DistanceEstimator::update(float pixel_radius, float frame_width, floa
     return update(pixel_radius, frame_width, gate_width_cm, now);
 }
 
+// Оценивает расстояние до ворот по пиксельному радиусу с медианным сглаживанием.
+// reliable=true только после накопления достаточного числа достоверных отсчётов.
 DistResult DistanceEstimator::update(float pixel_radius, float frame_width, float gate_width_cm, double now_seconds) {
     const float width_cm = gate_width_cm < 0.0F ? gate_width_cm_ : gate_width_cm;
     if (!std::isfinite(frame_width) || frame_width <= 0.0F || !std::isfinite(width_cm) || width_cm <= 0.0F) {

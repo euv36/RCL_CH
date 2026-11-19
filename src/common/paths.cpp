@@ -21,6 +21,8 @@ std::filesystem::path find_repository_root() {
 }
 }
 
+// Ищет контрактный файл сначала в local/, затем в корне репозитория.
+// Локальные файлы имеют приоритет, чтобы тесты не задевали эталонные данные.
 std::filesystem::path contract_path(const std::string& name) {
     const auto root = find_repository_root();
     const auto local_path = root / "local" / name;

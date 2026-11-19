@@ -68,6 +68,8 @@ ConnectRequest invalid(const std::string& message) {
 
 } // namespace
 
+// Разбирает текст поля CONNECT: IPv4, hostname и порт через двоеточие.
+// При любой ошибке возвращает invalid() с человекочитаемым сообщением.
 ConnectRequest parse_connect(const std::string& text) {
     const std::string value = trim(text);
     if (value.empty()) {

@@ -61,6 +61,10 @@ private:
     std::unique_ptr<Impl> impl_;
 };
 
+// Возвращает новый буфер кадра 640x360 (полный FOV без crop).
 cv::Mat downscale_and_rotate(const cv::Mat& bgr_frame);
+// Переиспользует вызванным кодом буфер между кадрами: память выделяется только
+// при первом вызове или при изменении размера/типа входного кадра.
+void downscale_and_rotate(const cv::Mat& bgr_frame, cv::Mat& processing);
 
 } // namespace camera_cpp

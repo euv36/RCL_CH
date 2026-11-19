@@ -36,6 +36,8 @@ const std::array<cv::Vec3b, 3> kTrackColors{
 
 } // namespace
 
+// Полный трекинг трёх ворот за кадр: Lab -> маски -> компоненты -> кластеры.
+// Буферы движка переиспользуются между кадрами, лишняя память не аллоцируется.
 std::array<GateTrackResult, 3> TrackingEngine::track(const TrackInput& input) {
     const auto total_start = std::chrono::steady_clock::now();
     TrackStageTimes times{};
@@ -215,7 +217,13 @@ std::array<GateTrackResult, 3> TrackingEngine::track(const TrackInput& input) {
         }
 
         if (!published.held) {
-            component_masks_[slot] = cv::Mat::zeros(size, CV_8UC1);
+            // Переиспользуем буфер маски между кадрами: при первом вызове или
+            // при смене размера выделяем память, затем только обнуляем её.
+            cv::Mat& component = component_masks_[slot];
+            if (component.size() != size || component.type() != CV_8UC1) {
+                component.create(size, CV_8UC1);
+            }
+            component.setTo(cv::Scalar(0));
             if (!result.bbox.empty()) {
                 cv::Mat region = filtered_masks_[slot](result.bbox);
                 cv::Mat out_region = component_masks_[slot](result.bbox);
@@ -235,6 +243,10 @@ std::array<GateTrackResult, 3> TrackingEngine::track(const TrackInput& input) {
 
 TrackStageTimes TrackingEngine::last_stage_ms() const noexcept {
     return last_times_;
+}
+
+const cv::Mat& TrackingEngine::component_mask(std::size_t slot) const noexcept {
+    return component_masks_[slot];
 }
 
 std::size_t TrackingEngine::cache_footprint_bytes() const noexcept {

@@ -83,6 +83,8 @@ std::string local_iso_timestamp() {
 
 } // namespace
 
+// Загружает настройки камеры, нормализуя управления по разрешённым диапазонам.
+// auto_exposure принудительно остаётся включённым: ручной режим не поддерживается.
 bool CamSettingsConfig::load(const std::string& path) {
     path_ = path;
     root_ = nlohmann::json::object();
@@ -116,6 +118,7 @@ bool CamSettingsConfig::set(const std::string& control, float value) {
     return true;
 }
 
+// Атомарно сохраняет настройки камеры, сохраняя неизвестные ключи конфига.
 bool CamSettingsConfig::save() const {
     nlohmann::json output = root_;
     normalize_controls(output);

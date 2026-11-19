@@ -14,6 +14,8 @@ cv::Mat normalized_frame(const cv::Mat& frame_rgb) {
 
 } // namespace
 
+// Строит BGRA-превью HSV с подсветкой масок ворот по правилам legacy hsv_view.
+// Маски несовпадающего размера игнорируются; пустой кадр становится 1280x720.
 cv::Mat build_hsv_mask_bgra(const cv::Mat& frame_rgb,
                             const std::array<cv::Mat, 3>& masks,
                             const HsvPalette& palette) {

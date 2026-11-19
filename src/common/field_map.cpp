@@ -117,6 +117,8 @@ std::string now_ts() {
 
 FieldMap::FieldMap(float, float, float) : root_(default_root()) {}
 
+// Загружает привязку ворот к полю и сохраняет неизвестные ключи в original_.
+// Некорректные angles/distances нормализуются или отбрасываются.
 bool FieldMap::load(const std::string& path) {
     path_ = path;
     std::string warning;
@@ -190,6 +192,7 @@ FieldBindResult FieldMap::bind_from_results(const std::vector<FieldObservationIn
     return FieldBindResult{true, ""};
 }
 
+// Атомарно сохраняет field_map.json, сохраняя неизвестные ключи исходного файла.
 bool FieldMap::save_atomic() const {
     std::string error;
     return atomic_write_text(path_, root_.dump(2), &error);

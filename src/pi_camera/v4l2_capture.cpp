@@ -238,13 +238,23 @@ void V4l2Capture::close() {
     impl_->config = CaptureConfig{};
 }
 
-cv::Mat downscale_and_rotate(const cv::Mat& full_frame) {
-    if (full_frame.empty()) return {};
-    cv::Mat processing;
-    // INTER_AREA is the tested equivalent of INTER_LINEAR for strong downscaling:
-    // it averages source pixels and avoids aliasing without cropping the sensor frame.
-    // cv::resize (like cv::rotate) is an OpenCV-primitives path, not a per-pixel loop.
+// Масштабирует полный кадр до рабочего размера Pi 640x360 без обрезки поля зрения.
+// INTER_AREA усредняет исходные пиксели и не даёт алиасинга при сильном уменьшении;
+// это OpenCV-примитив, а не ручной цикл по пикселям.
+void downscale_and_rotate(const cv::Mat& full_frame, cv::Mat& processing) {
+    if (full_frame.empty()) {
+        processing.release();
+        return;
+    }
+    // Память выделяется только при первом вызове или смене размера/типа:
+    // между кадрами буфер переиспользуется, что убирает аллокацию на кадр.
     cv::resize(full_frame, processing, {640, 360}, 0.0, 0.0, cv::INTER_AREA);
+}
+
+// Удобная обёртка для вызывающих, которым нужен новый кадр, а не переиспользование буфера.
+cv::Mat downscale_and_rotate(const cv::Mat& full_frame) {
+    cv::Mat processing;
+    downscale_and_rotate(full_frame, processing);
     return processing;
 }
 

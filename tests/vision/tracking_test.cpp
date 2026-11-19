@@ -132,6 +132,19 @@ int main() {
         }
         previous_footprint = footprint;
     }
+    // Маска компонента обязана переиспользовать буфер между кадрами.
+    // Закреплённый заголовок удерживает старую память, поэтому новая
+    // аллокация через cv::Mat::zeros изменила бы указатель данных.
+    TrackingEngine mask_reuse_engine;
+    const auto first_mask_frame = mask_reuse_engine.track(input);
+    CAMERA_TEST_CHECK(!first_mask_frame[0].mask.empty());
+    cv::Mat pinned_mask = mask_reuse_engine.component_mask(0);
+    for (int i = 0; i < 30; ++i) {
+        mask_reuse_engine.track(input);
+        CAMERA_TEST_CHECK(mask_reuse_engine.component_mask(0).data == pinned_mask.data);
+    }
+    CAMERA_TEST_CHECK(mask_reuse_engine.component_mask(0).at<uchar>(375, 955) != 0);
+
     const auto timings = engine.last_stage_ms();
     CAMERA_TEST_CHECK(timings.cvt_ms >= 0.0F);
     CAMERA_TEST_CHECK(timings.mask_ms >= 0.0F);

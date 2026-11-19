@@ -7,6 +7,8 @@ namespace {
 constexpr std::uintmax_t kMaxJsonBytes = 8U * 1024U * 1024U;
 }
 
+// Читает JSON по пути; отсутствие файла не считается ошибкой и отдаёт nullopt.
+// Битый JSON возвращает nullopt с предупреждением, чтобы вызывающий не падал.
 std::optional<nlohmann::json> read_json_file(const std::filesystem::path& path, std::string* warning) {
     auto set_warning = [warning](const std::string& message) {
         if (warning) {

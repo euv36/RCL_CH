@@ -155,6 +155,8 @@ double gate_rect_gap(float x1, float y1, float w1, float h1,
     return std::sqrt(dx * dx + dy * dy);
 }
 
+// Группирует компоненты в ворота по геометрии и выбирает лучший кандидат.
+// Приоритет отдают позиции из предыдущего кадра, чтобы не терять ворота.
 GateObject build_gate_object(const std::vector<GateComponent>& components,
                              const GateClusterParams& params,
                              std::optional<float> previous_x,
@@ -371,6 +373,8 @@ void GateStability::reset() {
     pending_ = {};
 }
 
+// Обновляет стабильность detections: держит последнюю позицию короткую
+// окклюзию и сбрасывает её после заданного числа пустых кадров.
 GateStabilityResult GateStability::update(bool detected, float cx, float cy,
                                           float radius, float area, int members) {
     if (!detected) {

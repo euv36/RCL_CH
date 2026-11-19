@@ -2,6 +2,8 @@
 
 namespace camera_cpp::laptop {
 
+// Рассчитывает непересекающиеся области панелей для заданного размера окна.
+// Верхний ряд и нижняя панель фиксированы, центр делится между видео и сайдбаром.
 UiLayout compute_ui_layout(float width, float height) {
     UiLayout layout;
     const float margin = 8.0F;

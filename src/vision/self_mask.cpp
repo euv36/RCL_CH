@@ -14,6 +14,8 @@ float unit_fraction(float value, float fallback) {
 
 } // namespace
 
+// Строит маску разрешённых пикселей: убирает Own Goal и уменьшает зону поиска.
+// Возвращает пустую Mat, если маска себя выключена.
 cv::Mat build_keep_mask(cv::Size size, const SelfMask& mask) {
     const int width = std::max(size.width, 1);
     const int height = std::max(size.height, 1);

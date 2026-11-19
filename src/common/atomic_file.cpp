@@ -59,6 +59,8 @@ bool write_all(int fd, const char* data, size_t size) {
 }
 }
 
+// Атомарно записывает текст: сначала в временный файл рядом, затем rename().
+// При ошибке временный файл удаляется, а original остаётся без изменений.
 bool atomic_write_text(const std::filesystem::path& path, std::string_view text, std::string* error) {
     auto set_error = [error](const std::string& message) {
         if (error) {
