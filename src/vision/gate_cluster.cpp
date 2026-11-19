@@ -9,6 +9,113 @@ namespace {
 constexpr double kInfinity = std::numeric_limits<double>::infinity();
 constexpr float kFallbackFrameWidth = 1280.0f;
 constexpr float kFallbackFrameHeight = 720.0f;
+
+struct Point {
+    double x = 0.0;
+    double y = 0.0;
+};
+
+double cross(const Point& origin, const Point& a, const Point& b) {
+    return (a.x - origin.x) * (b.y - origin.y) -
+           (a.y - origin.y) * (b.x - origin.x);
+}
+
+std::vector<Point> convex_hull(std::vector<Point> points) {
+    if (points.size() < 3) return points;
+    std::sort(points.begin(), points.end(), [](const Point& left, const Point& right) {
+        if (left.x != right.x) return left.x < right.x;
+        return left.y < right.y;
+    });
+    std::vector<Point> hull(points.size() * 2);
+    std::size_t size = 0;
+    for (const Point& point : points) {
+        while (size >= 2 && cross(hull[size - 2], hull[size - 1], point) <= 1e-12) --size;
+        hull[size++] = point;
+    }
+    const std::size_t lower = size + 1;
+    for (std::size_t i = points.size(); i-- > 0;) {
+        const Point& point = points[i];
+        while (size >= lower && cross(hull[size - 2], hull[size - 1], point) <= 1e-12) --size;
+        hull[size++] = point;
+    }
+    hull.resize(size > 0 ? size - 1 : 0);
+    return hull;
+}
+
+// Minimum-area enclosing rectangle via rotating calipers. The orientation is
+// derived from the convex hull, so a thin diagonal lamp stand cannot hide
+// behind a square axis-aligned bounding box.
+void oriented_extents(const std::vector<Point>& points, double& min_side, double& max_side) {
+    min_side = 0.0;
+    max_side = 0.0;
+    if (points.empty()) return;
+
+    const std::vector<Point> hull = convex_hull(points);
+    if (hull.size() < 2) return;
+    if (hull.size() == 2) {
+        const double dx = hull[1].x - hull[0].x;
+        const double dy = hull[1].y - hull[0].y;
+        max_side = std::sqrt(dx * dx + dy * dy);
+        return;
+    }
+
+    const std::size_t count = hull.size();
+    auto dot = [&hull](std::size_t index, double x, double y) {
+        return hull[index].x * x + hull[index].y * y;
+    };
+    auto advance_max = [&hull, count, dot](std::size_t& index, double x, double y) {
+        for (std::size_t step = 0; step < count; ++step) {
+            const std::size_t next = (index + 1) % count;
+            if (dot(next, x, y) <= dot(index, x, y) + 1e-12) break;
+            index = next;
+        }
+    };
+    auto advance_min = [&hull, count, dot](std::size_t& index, double x, double y) {
+        for (std::size_t step = 0; step < count; ++step) {
+            const std::size_t next = (index + 1) % count;
+            if (dot(next, x, y) >= dot(index, x, y) - 1e-12) break;
+            index = next;
+        }
+    };
+
+    std::size_t max_u = 0, min_u = 0, max_v = 0, min_v = 0;
+    double best_area = kInfinity;
+    for (std::size_t i = 0; i < count; ++i) {
+        const Point& start = hull[i];
+        const Point& end = hull[(i + 1) % count];
+        const double dx = end.x - start.x;
+        const double dy = end.y - start.y;
+        const double length = std::sqrt(dx * dx + dy * dy);
+        if (length <= 1e-12) continue;
+        const double ux = dx / length;
+        const double uy = dy / length;
+        const double vx = -uy;
+        const double vy = ux;
+
+        if (i == 0) {
+            for (std::size_t index = 1; index < count; ++index) {
+                if (dot(index, ux, uy) > dot(max_u, ux, uy)) max_u = index;
+                if (dot(index, ux, uy) < dot(min_u, ux, uy)) min_u = index;
+                if (dot(index, vx, vy) > dot(max_v, vx, vy)) max_v = index;
+                if (dot(index, vx, vy) < dot(min_v, vx, vy)) min_v = index;
+            }
+        } else {
+            advance_max(max_u, ux, uy);
+            advance_min(min_u, ux, uy);
+            advance_max(max_v, vx, vy);
+            advance_min(min_v, vx, vy);
+        }
+
+        const double width = dot(max_u, ux, uy) - dot(min_u, ux, uy);
+        const double height = dot(max_v, vx, vy) - dot(min_v, vx, vy);
+        const double area = width * height;
+        if (area < best_area) {
+            best_area = area;
+            min_side = std::min(width, height);
+            max_side = std::max(width, height);
+        }
+    }
+}
 }
 
 GateClusterParams resolve_cluster_params(int width, int height,
@@ -125,6 +232,7 @@ GateObject build_gate_object(const std::vector<GateComponent>& components,
         double cx = 0.0, cy = 0.0, area = 0.0, x = kInfinity, y = kInfinity;
         double x1 = -kInfinity, y1 = -kInfinity, w = 0.0, h = 0.0;
         int members = 0;
+        std::vector<Point> corners;
     };
     std::vector<Aggregate> aggregates;
     aggregates.reserve(cluster_lists.size());
@@ -139,6 +247,11 @@ GateObject build_gate_object(const std::vector<GateComponent>& components,
             aggregate.y = std::min(aggregate.y, static_cast<double>(component.y));
             aggregate.x1 = std::max(aggregate.x1, static_cast<double>(component.x + component.w));
             aggregate.y1 = std::max(aggregate.y1, static_cast<double>(component.y + component.h));
+            aggregate.corners.push_back(Point{static_cast<double>(component.x), static_cast<double>(component.y)});
+            aggregate.corners.push_back(Point{static_cast<double>(component.x + component.w), static_cast<double>(component.y)});
+            aggregate.corners.push_back(Point{static_cast<double>(component.x), static_cast<double>(component.y + component.h)});
+            aggregate.corners.push_back(Point{static_cast<double>(component.x + component.w),
+                                              static_cast<double>(component.y + component.h)});
             ++aggregate.members;
         }
         aggregate.cx /= aggregate.area;
@@ -150,9 +263,11 @@ GateObject build_gate_object(const std::vector<GateComponent>& components,
 
     aggregates.erase(std::remove_if(aggregates.begin(), aggregates.end(),
                                     [min_side_px, &params](const Aggregate& aggregate) {
-                                        const double small = std::min(aggregate.w, aggregate.h);
-                                        return small <= 0.0 || small < min_side_px ||
-                                               std::max(aggregate.w, aggregate.h) / small > params.max_aspect;
+                                        double min_side = 0.0;
+                                        double max_side = 0.0;
+                                        oriented_extents(aggregate.corners, min_side, max_side);
+                                        return min_side <= 0.0 || min_side < min_side_px ||
+                                               max_side / min_side > params.max_aspect;
                                     }),
                      aggregates.end());
     if (aggregates.empty()) return {};

@@ -57,6 +57,21 @@ int main() {
     CAMERA_TEST_CHECK(split.bbox.w == 183);
     CAMERA_TEST_CHECK(std::fabs(split.cx - 391.5f) < 0.6f);
 
+    // A thin diagonal lamp stand or tape strip has a near-square axis-aligned
+    // bbox. The oriented min-area rectangle must still reject it.
+    std::vector<GateComponent> diagonal_strip;
+    for (int i = 0; i < 20; ++i) {
+        diagonal_strip.push_back(comp(100 + i * 20, 100 + i * 20, 14, 14));
+    }
+    CAMERA_TEST_CHECK(!build_gate_object(diagonal_strip, p, std::nullopt, std::nullopt).found);
+
+    // A genuinely thick diagonal gate stays accepted by the oriented guard.
+    std::vector<GateComponent> diagonal_gate;
+    for (int i = 0; i < 6; ++i) {
+        diagonal_gate.push_back(comp(200 + i * 24, 200 + i * 24, 40, 40));
+    }
+    CAMERA_TEST_CHECK(build_gate_object(diagonal_gate, p, std::nullopt, std::nullopt).found);
+
     std::vector<GateComponent> many;
     many.reserve(300);
     for (int i = 0; i < 300; ++i) many.push_back(comp(100 + (i % 20) * 2, 100 + (i % 15) * 2, 90, 90));

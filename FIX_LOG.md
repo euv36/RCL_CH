@@ -67,3 +67,29 @@ $env:Path = 'C:\msys64\mingw64\bin;C:\msys64\usr\bin;' + $env:Path
 & 'C:\msys64\mingw64\bin\ctest.exe' --test-dir build-msys2 --output-on-failure
 ```
 Result: `laptop_dependency_gate` Passed; full suite 17/17 Passed. `[VERIFIED]`
+
+---
+
+## Task 6 — Ориентированная проверка формы кластера ворот
+
+**Баг / корневая причина**
+- Защита от ложных ворот проверяла только стороны axis-aligned bbox.
+- Тонкая диагональная стойка лампы или полоса изоленты даёт почти квадратный bbox, поэтому отношение сторон проходило порог `max_aspect`, хотя реальная толщина объекта была несколько пикселей.
+
+**Изменённые файлы**
+- `src/vision/gate_cluster.cpp`
+- `tests/vision/gate_cluster_test.cpp`
+
+**Исправление / оптимизация**
+- Добавлено построение выпуклой оболочки по углам bbox компонентов и поиск минимального по площади описанного прямоугольника вращающимися калиперами.
+- Фильтр теперь использует ориентированные `min_side`/`max_side`; диагональная тонкая полоса отбрасывается, а реальные ворота под углом остаются.
+- Реализация остаётся без зависимости от OpenCV, поэтому модуль `camera_vision` по-прежнему собирается в no-OpenCV профиле.
+- Добавлены регрессии: диагональная полоса из 20 квадратов 14×14 должна быть отброшена, толстые диагональные ворота 40×40 должны пройти.
+
+**Проверка**
+```powershell
+$env:Path = 'C:\msys64\mingw64\bin;C:\msys64\usr\bin;' + $env:Path
+& 'C:\msys64\mingw64\bin\cmake.exe' --build build-msys2 --target kCameraCppGateClusterTest
+& 'C:\msys64\mingw64\bin\ctest.exe' --test-dir build-msys2 -R gate_cluster --output-on-failure
+```
+Результат: `gate_cluster` Passed (1/1). `[VERIFIED]`
