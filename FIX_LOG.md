@@ -577,3 +577,33 @@ set "PATH=C:\msys64\mingw64\bin;%PATH%"
 build-msys2\src\local_camera_preview.exe --index 0
 ```
 Закрытие окна — `ESC` или кнопка `X`. Pi/live по-прежнему `[UNVERIFIED ON HARDWARE]`.
+
+---
+
+## Hardware-прогон на Pi 2026-11-19
+
+**Баг / корневая причина**
+- До этого момента запуск на Pi был запрещён режимом blind Pi, поэтому `docs/VERIFICATION.md` содержал только статические проверки и статус `[UNVERIFIED ON HARDWARE]`.
+- Пользователь явно дал IP `10.132.122.51` и разрешил подключиться и запустить прогу камеры.
+
+**Изменённые файлы**
+- `docs/VERIFICATION.md`
+- `docs/DEPLOY.md`
+- `FIX_LOG.md`
+
+**Исправление / оптимизация**
+- Настроен SSH через helper `raspberry-pi` (пароль сохранён пользователем локально, в чат не передавался); host key SHA256:oJEah4pSr56l0SWM5JA5laA95HR8ZKw3xhlmWCFNz5Y.
+- Исходники `ba30c23` упакованы в `git archive` и скопированы в `/tmp/camera_cpp_smoke`; на Pi собран `camera_service` (OpenCV 4.10.0, libzmq, без laptop-целей).
+- Сервис запущен временно, без systemd и без робота: `--no-serial --bind-host 10.132.122.51`, порты 5555/5557/5559, PID 1537. Прошивка и последовательный порт не трогались.
+- Smoke с ноутбука подтвердил валидный мультипарт `[JPEG, JSON]`: `ok=true`, `messages=1`, `valid_jpeg=1`, `valid_json=1`, `fps≈10.75`, `frame_wh=[640,360]`, `src=pi`.
+- Через PUB на 5557 включены ворота G1 (жёлтый, `role=ours`); конфиг сохранён в `/tmp/camera_cpp_smoke/saved_gates.json`. Повторный smoke: `enabled=true`, `found=false` — в поле зрения нет жёлтых ворот, что ожидаемо.
+- Обновлены статусы документации: фактический hardware-прогон описан в `docs/VERIFICATION.md`, `docs/DEPLOY.md` ссылается на него.
+
+**Проверка**
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Users\sweetener\.config\opencode\skills\raspberry-pi\scripts\raspi.ps1" test -Ip 10.132.122.51
+python tests/integration/pi_service_smoke.py --host 10.132.122.51 --duration 5 --output local/pi_smoke_summary.json
+```
+Результат: SSH OK; сборка на Pi без ошибок; оба smoke-запуска `ok=true`; сервис оставлен запущенным для дальнейших тестов пользователя. `[VERIFIED ON HARDWARE]`
+
+CAM SET с физическим изменением настроек камеры, остановка сервиса и восстановление конфигов не выполнялись — пользователь может сделать это отдельно. Сон ноутбука не выполнялся.
