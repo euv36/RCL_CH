@@ -3,6 +3,10 @@
 #include <fstream>
 #include <sstream>
 
+namespace {
+constexpr std::uintmax_t kMaxJsonBytes = 8U * 1024U * 1024U;
+}
+
 std::optional<nlohmann::json> read_json_file(const std::filesystem::path& path, std::string* warning) {
     auto set_warning = [warning](const std::string& message) {
         if (warning) {
@@ -17,6 +21,15 @@ std::optional<nlohmann::json> read_json_file(const std::filesystem::path& path, 
     std::error_code ec;
     if (!std::filesystem::exists(path, ec) || !std::filesystem::is_regular_file(path, ec)) {
         return set_warning("missing or unreadable JSON file: " + path.string());
+    }
+
+    std::error_code size_ec;
+    const auto size = std::filesystem::file_size(path, size_ec);
+    if (size_ec) {
+        return set_warning("could not stat JSON file: " + path.string());
+    }
+    if (size > kMaxJsonBytes) {
+        return set_warning("JSON file is too large: " + path.string());
     }
 
     std::ifstream in(path, std::ios::binary);

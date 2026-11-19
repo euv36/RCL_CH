@@ -23,11 +23,28 @@ int main() {
     remove_quiet(path);
     std::string error;
     CAMERA_TEST_CHECK(atomic_write_text(path, "hello", &error));
-    std::ifstream in(path);
-    std::string content;
-    in >> content;
-    CAMERA_TEST_CHECK(content == "hello");
+    {
+        std::ifstream in(path);
+        std::string content;
+        in >> content;
+        CAMERA_TEST_CHECK(content == "hello");
+    }
     CAMERA_TEST_CHECK(error.empty());
+
+    // Replacing an existing file on Windows must use an atomic replace, not fail.
+    CAMERA_TEST_CHECK(atomic_write_text(path, "replacement-with-longer-content", &error));
+    {
+        std::ifstream replaced(path, std::ios::binary);
+        std::string replaced_text((std::istreambuf_iterator<char>(replaced)), std::istreambuf_iterator<char>());
+        CAMERA_TEST_CHECK(replaced_text == "replacement-with-longer-content");
+    }
+
+    // A path without a parent component must resolve against the current directory.
+    const std::filesystem::path relative = "camera_cpp_atomic_relative_test.json";
+    remove_quiet(relative);
+    CAMERA_TEST_CHECK(atomic_write_text(relative, "relative", &error));
+    CAMERA_TEST_CHECK(std::ifstream(relative).good());
+    remove_quiet(relative);
 
     const auto nested = make_temp_path("nested") / "child" / "file.txt";
     remove_quiet(nested.parent_path());

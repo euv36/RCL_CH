@@ -70,9 +70,9 @@ bool atomic_write_text(const std::filesystem::path& path, std::string_view text,
         error->clear();
     }
 
-    const auto parent = path.parent_path();
+    const auto parent = path.parent_path().empty() ? std::filesystem::path(".") : path.parent_path();
     std::error_code ec;
-    if (parent.empty() || !std::filesystem::exists(parent, ec) || !std::filesystem::is_directory(parent, ec)) {
+    if (!std::filesystem::exists(parent, ec) || !std::filesystem::is_directory(parent, ec)) {
         return set_error("parent directory does not exist: " + parent.string());
     }
 
@@ -105,17 +105,37 @@ bool atomic_write_text(const std::filesystem::path& path, std::string_view text,
 #endif
     ok = ok && close_rc == 0;
 
+    std::string rename_error;
     if (ok) {
 #if defined(_WIN32)
-        ok = MoveFileExW(temp.wstring().c_str(), path.wstring().c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
+        if (!MoveFileExW(temp.wstring().c_str(), path.wstring().c_str(),
+                         MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+            ok = false;
+            rename_error = "MoveFileExW failed with error " + std::to_string(GetLastError());
+        }
 #else
-        ok = std::filesystem::rename(temp, path, ec), !ec;
+        std::filesystem::rename(temp, path, ec);
+        if (ec) {
+            ok = false;
+            rename_error = ec.message();
+        }
 #endif
     }
 
+#if !defined(_WIN32)
+    // Persist the directory entry so the rename survives a power loss.
+    if (ok) {
+        const int dir_fd = ::open(parent.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+        if (dir_fd >= 0) {
+            ::fsync(dir_fd);
+            ::close(dir_fd);
+        }
+    }
+#endif
+
     if (!ok) {
         std::filesystem::remove(temp, ec);
-        return set_error("atomic rename failed: " + std::string(std::strerror(errno)));
+        return set_error(rename_error.empty() ? "atomic rename failed" : "atomic rename failed: " + rename_error);
     }
     if (error) {
         error->clear();
