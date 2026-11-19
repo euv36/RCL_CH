@@ -226,6 +226,22 @@ target_include_directories(camera_laptop_video PUBLIC ${CMAKE_CURRENT_SOURCE_DIR
 add_executable(kCameraCppPiVideoClientTest ../tests/laptop/pi_video_client_test.cpp)
 target_link_libraries(kCameraCppPiVideoClientTest PRIVATE camera_laptop_video)
 add_test(NAME pi_video_client COMMAND kCameraCppPiVideoClientTest)
+
+add_library(camera_laptop_app STATIC laptop/opencv_app.cpp)
+target_link_libraries(camera_laptop_app PUBLIC camera_warnings camera_laptop_core
+  camera_laptop_widgets camera_laptop_hsv camera_laptop_preview camera_laptop_video
+  camera_laptop_status camera_laptop_publish camera_vision_cv camera_vision camera_common
+  ${OpenCV_LIBS} ${ZMQ_LIBRARIES})
+target_include_directories(camera_laptop_app PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
+  ${CMAKE_CURRENT_SOURCE_DIR}/common ${CMAKE_CURRENT_SOURCE_DIR}/vision
+  ${OpenCV_INCLUDE_DIRS} ${ZMQ_INCLUDE_DIRS} ${ZMQ_INCLUDE_DIR})
+
+add_executable(camera_ui laptop/opencv_main.cpp)
+target_link_libraries(camera_ui PRIVATE camera_laptop_app Threads::Threads)
+
+add_executable(kCameraCppOpenCVAppTest ../tests/laptop/opencv_app_test.cpp)
+target_link_libraries(kCameraCppOpenCVAppTest PRIVATE camera_laptop_app)
+add_test(NAME opencv_app COMMAND kCameraCppOpenCVAppTest)
 endif()
 
 add_executable(kCameraCppLayoutSmokeTest ../tests/laptop/layout_smoke_test.cpp)

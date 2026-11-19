@@ -105,7 +105,7 @@ find_package(PkgConfig QUIET)
 # ---------------------------------------------------------------------------
 # OpenCV (OpenCV 5 config in MSYS2 lives at <prefix>/lib/cmake/opencv5)
 # ---------------------------------------------------------------------------
-find_package(OpenCV QUIET COMPONENTS core imgproc imgcodecs videoio)
+find_package(OpenCV QUIET COMPONENTS core imgproc imgcodecs videoio highgui)
 if(OpenCV_FOUND)
   set(_camera_cpp_opencv_trusted TRUE)
 
