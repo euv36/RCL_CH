@@ -378,16 +378,27 @@ void OpenCVApp::save_gate(int slot) {
 
     cv::Vec3b mean_color{0, 0, 0};
     if (selecting_ && selection_start_.x >= 0) {
-        const cv::Point a = selection_start_;
-        const cv::Point b = selection_current_;
-        const cv::Rect selection(std::min(a.x, b.x), std::min(a.y, b.y),
-                                 std::abs(b.x - a.x) + 1, std::abs(b.y - a.y) + 1);
-        const cv::Rect clipped = selection & cv::Rect(0, 0, portrait_frame_.cols, portrait_frame_.rows);
-        if (clipped.width > 0 && clipped.height > 0) {
-            const cv::Scalar mean = cv::mean(portrait_frame_(clipped));
-            mean_color = cv::Vec3b(static_cast<uint8_t>(mean[0]), static_cast<uint8_t>(mean[1]),
-                                   static_cast<uint8_t>(mean[2]));
+        const auto fitted = fit_rect(468, 520, portrait_frame_.cols, portrait_frame_.rows);
+        int x1 = 0, y1 = 0, x2 = 0, y2 = 0;
+        if (!preview_point_to_image(fitted, selection_start_.x, selection_start_.y,
+                                    portrait_frame_.cols, portrait_frame_.rows, x1, y1) ||
+            !preview_point_to_image(fitted, selection_current_.x, selection_current_.y,
+                                    portrait_frame_.cols, portrait_frame_.rows, x2, y2)) {
+            selecting_ = false;
+            log_.push("SAVE G" + std::to_string(slot) + " selection outside");
+            return;
         }
+        const cv::Rect selection(std::min(x1, x2), std::min(y1, y2),
+                                 std::abs(x2 - x1) + 1, std::abs(y2 - y1) + 1);
+        const cv::Rect clipped = selection & cv::Rect(0, 0, portrait_frame_.cols, portrait_frame_.rows);
+        if (clipped.width <= 0 || clipped.height <= 0) {
+            selecting_ = false;
+            log_.push("SAVE G" + std::to_string(slot) + " selection empty");
+            return;
+        }
+        const cv::Scalar mean = cv::mean(portrait_frame_(clipped));
+        mean_color = cv::Vec3b(static_cast<uint8_t>(mean[0]), static_cast<uint8_t>(mean[1]),
+                               static_cast<uint8_t>(mean[2]));
         selecting_ = false;
     } else {
         const cv::Rect center(portrait_frame_.cols / 2 - 20, portrait_frame_.rows / 2 - 20, 40, 40);
@@ -396,8 +407,8 @@ void OpenCVApp::save_gate(int slot) {
                                static_cast<uint8_t>(mean[2]));
     }
 
-    state_.gate_colors[index] = {mean_color[2], mean_color[1], mean_color[0]};
-    const RgbLab lab = rgb_to_lab_u8(mean_color[2], mean_color[1], mean_color[0]);
+    state_.gate_colors[index] = {mean_color[0], mean_color[1], mean_color[2]};
+    const RgbLab lab = rgb_to_lab_u8(mean_color[0], mean_color[1], mean_color[2]);
     GateLab legacy{};
     legacy[0] = std::clamp(static_cast<int>(std::lround(lab.L)) - 10, 0, 100);
     legacy[1] = std::clamp(static_cast<int>(std::lround(lab.L)) + 10, 0, 100);
@@ -454,9 +465,22 @@ void OpenCVApp::render_main() {
         buttons[i].draw(canvas_, active);
     }
 
+    cv::Mat left_view = portrait_frame_;
+    if (!portrait_frame_.empty() && state_.view_mode != AppState::ViewMode::Bitmap) {
+        cv::Mat lab;
+        cv::cvtColor(portrait_frame_, lab, cv::COLOR_RGB2Lab);
+        std::vector<cv::Mat> channels;
+        cv::split(lab, channels);
+        int channel = 0;
+        if (state_.view_mode == AppState::ViewMode::LabA) channel = 1;
+        if (state_.view_mode == AppState::ViewMode::LabB) channel = 2;
+        cv::Mat gray = channels[channel].clone();
+        cv::cvtColor(gray, left_view, cv::COLOR_GRAY2RGB);
+    }
+
     const auto areas = preview_areas();
     for (std::size_t i = 0; i < areas.size(); ++i) {
-        const cv::Mat& image = i == 0 ? portrait_frame_ : processed_frame_;
+        const cv::Mat& image = i == 0 ? left_view : processed_frame_;
         cv::rectangle(canvas_, {areas[i].x, areas[i].y},
                       {areas[i].x + areas[i].w, areas[i].y + areas[i].h},
                       cv::Scalar(80, 80, 80), 1);
@@ -469,7 +493,10 @@ void OpenCVApp::render_main() {
         }
     }
     if (selecting_ && selection_start_.x >= 0) {
-        cv::rectangle(canvas_, selection_start_, selection_current_, cv::Scalar(0, 220, 0), 1);
+        const auto preview = preview_areas();
+        const cv::Point a(preview[0].x + selection_start_.x, preview[0].y + selection_start_.y);
+        const cv::Point b(preview[0].x + selection_current_.x, preview[0].y + selection_current_.y);
+        cv::rectangle(canvas_, a, b, cv::Scalar(0, 220, 0), 1);
     }
 
     CvTextInput input;
@@ -550,9 +577,9 @@ cv::Mat OpenCVApp::build_hsv_frame() const {
     HsvPalette palette;
     for (int i = 0; i < 3; ++i) {
         palette.gate_colors[i] = cv::Vec3b(
-            static_cast<uchar>(state_.gate_colors[i][2]),
+            static_cast<uchar>(state_.gate_colors[i][0]),
             static_cast<uchar>(state_.gate_colors[i][1]),
-            static_cast<uchar>(state_.gate_colors[i][0]));
+            static_cast<uchar>(state_.gate_colors[i][2]));
     }
     cv::Mat frame = build_hsv_mask_bgra(portrait_frame_, gate_masks_, palette);
     cv::putText(frame, "HSV MASK", {10, 30}, cv::FONT_HERSHEY_SIMPLEX,
@@ -689,6 +716,26 @@ void OpenCVApp::handle_mouse(int event, int x, int y, int flags) {
             case 10: state_.show_help = !state_.show_help; break;
             default: break;
         }
+        return;
+    }
+
+    const auto sliders = bottom_sliders();
+    for (int i = 0; i < static_cast<int>(sliders.size()); ++i) {
+        if (!sliders[i].rect.contains(x, y) || event != cv::EVENT_LBUTTONDOWN) continue;
+        const int value = sliders[i].value_from_x(x);
+        const int slot = target_gate_;
+        const auto record = gate_store_.gate(static_cast<GateId>(slot));
+        GateLab lab = record && record->lab ? *record->lab : GateLab{50, 90, -20, 20, -20, 20};
+        lab[i] = value;
+        const auto roles = gate_store_.roles();
+        gate_store_.upsert(static_cast<GateId>(slot),
+                           {state_.gate_colors[slot - 1][0], state_.gate_colors[slot - 1][1],
+                            state_.gate_colors[slot - 1][2]},
+                           roles[slot - 1], lab);
+        gate_store_.save_atomic();
+        colors_dirty_ = true;
+        state_.gate_save_status = "G" + std::to_string(slot) + " thr " + std::to_string(i) + "=" + std::to_string(value);
+        log_.push(state_.gate_save_status);
         return;
     }
 
@@ -853,7 +900,10 @@ int OpenCVApp::run() {
             if (video_client_.receive(video)) {
                 frame = video.rgb.clone();
                 if (video.has_status) {
-                    status_ = parse_status_payload(video.status_json, clock::now(), clock::now());
+                    status_json_ = video.status_json;
+                    status_received_at_ = clock::now();
+                    has_status_ = true;
+                    status_ = parse_status_payload(status_json_, status_received_at_, status_received_at_);
                     apply_status(status_);
                 }
             }
@@ -863,6 +913,10 @@ int OpenCVApp::run() {
             if (!bgr.empty()) cv::cvtColor(bgr, frame, cv::COLOR_BGR2RGB);
         }
 
+        if (has_status_) {
+            status_ = parse_status_payload(status_json_, status_received_at_, clock::now());
+            apply_status(status_);
+        }
         if (!frame.empty() && !state_.paused) process_frame(frame);
         publish_colors();
         if (state_.show_cam_settings &&
@@ -879,6 +933,10 @@ int OpenCVApp::run() {
         if (state_.show_help) render_help();
         else cv::destroyWindow(kHelpWindow);
 
+        if (cv::getWindowProperty(kMainWindow, cv::WND_PROP_VISIBLE) < 1) {
+            quit_requested_ = true;
+            break;
+        }
         const int key = cv::waitKey(1);
         if (key >= 0) handle_key(key);
     }

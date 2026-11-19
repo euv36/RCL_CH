@@ -83,7 +83,7 @@ ConnectRequest parse_connect(const std::string& text) {
     if (lowered == "local") {
         ConnectRequest request;
         request.kind = AppState::SourceKind::Local;
-        request.camera_index = -1;
+        request.camera_index = 0;
         request.camera_source_text = value;
         return request;
     }

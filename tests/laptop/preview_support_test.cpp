@@ -3,10 +3,12 @@
 #include "../test_checks.hpp"
 
 #include <cstdint>
+#include <iostream>
 
 using camera_cpp::laptop::RgbaImage;
 using camera_cpp::laptop::bgr_to_rgba;
 using camera_cpp::laptop::fit_rect;
+using camera_cpp::laptop::preview_point_to_image;
 
 int main() {
     cv::Mat bgr(1, 2, CV_8UC3);
@@ -43,5 +45,14 @@ int main() {
     CAMERA_TEST_CHECK(tall.x + tall.w <= 400);
     CAMERA_TEST_CHECK(tall.y + tall.h <= 800);
     CAMERA_TEST_CHECK(tall.w == 400);
+
+    const camera_cpp::laptop::PreviewRect fitted = fit_rect(468, 520, 720, 1280);
+    int ix = -1, iy = -1;
+    CAMERA_TEST_CHECK(preview_point_to_image(fitted, fitted.x, fitted.y, 720, 1280, ix, iy));
+    CAMERA_TEST_CHECK(ix == 0 && iy == 0);
+    CAMERA_TEST_CHECK(!preview_point_to_image(fitted, fitted.x - 1, fitted.y, 720, 1280, ix, iy));
+    CAMERA_TEST_CHECK(preview_point_to_image(fitted, fitted.x + fitted.w - 1, fitted.y + fitted.h - 1, 720, 1280, ix, iy));
+    CAMERA_TEST_CHECK(ix >= 0 && ix < 720);
+    CAMERA_TEST_CHECK(iy >= 0 && iy < 1280);
     return 0;
 }

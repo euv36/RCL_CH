@@ -22,7 +22,7 @@ int main() {
     const ConnectRequest local_auto = parse_connect("local");
     CAMERA_TEST_CHECK(local_auto.valid());
     CAMERA_TEST_CHECK(local_auto.kind == AppState::SourceKind::Local);
-    CAMERA_TEST_CHECK(local_auto.camera_index == -1);
+    CAMERA_TEST_CHECK(local_auto.camera_index == 0);
 
     const ConnectRequest local_one = parse_connect("1");
     CAMERA_TEST_CHECK(local_one.valid());

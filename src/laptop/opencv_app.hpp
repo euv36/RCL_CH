@@ -97,6 +97,9 @@ private:
     std::array<GateTrackResult, 3> track_results_{};
     std::array<cv::Mat, 3> gate_masks_{};
     ParsedStatus status_{};
+    std::string status_json_;
+    std::chrono::steady_clock::time_point status_received_at_{};
+    bool has_status_ = false;
     CvLog log_;
     FieldMap field_map_;
     CamSettingsConfig cam_config_;

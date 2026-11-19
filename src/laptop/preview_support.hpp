@@ -28,4 +28,9 @@ RgbaImage bgr_to_rgba(const cv::Mat& bgr);
 // Вписывает кадр в окно без обрезки поля зрения, по центру.
 PreviewRect fit_rect(int window_w, int window_h, int image_w, int image_h);
 
+// Переводит точку окна предпросмотра (относительно области) в координаты кадра.
+// Возвращает false, если точка вне вписанного кадра.
+bool preview_point_to_image(const PreviewRect& fitted, int rel_x, int rel_y,
+                           int image_w, int image_h, int& out_x, int& out_y);
+
 } // namespace camera_cpp::laptop

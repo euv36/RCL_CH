@@ -657,6 +657,54 @@ $env:Path = 'C:\msys64\mingw64\bin;C:\msys64\usr\bin;' + $env:Path
 
 ---
 
+## Аудит rewrite UI — закрытие багов (2026-11-20)
+
+**Баг / корневая причина**
+- `parse_connect("local")` возвращал `camera_index = -1`, поэтому локальная камера не открывалась.
+- `OpenCVApp::run()` вызывал `parse_status_payload(json, now, now)`: `stale` всегда false, при остановке Pi статус не переоценивался.
+- В `save_gate()` среднее из RGB-кадра записывалось как BGR (`{mean[2],mean[1],mean[0]}`), а `rgb_to_lab_u8` получал BGR → неверные цвета и LAB.
+- В `build_hsv_frame()` палитра заполнялась `{gate_colors[2],[1],[0]}`, хотя `HsvPalette` ожидает RGB → инвертированные маски/легенда.
+- Выделение сохраняло координаты preview-области без маппинга в кадр 720x1280; рамка рисовалась в неправильном месте.
+- Режимы вида L/A/B меняли состояние, но отрисовка всегда показывала bitmap.
+- Нижние LAB-слайдеры не обрабатывали мышь.
+- Закрытие окна по X не завершало цикл (нет проверки `WND_PROP_VISIBLE`).
+- Пустое выделение сохраняло чёрный цвет и `enabled=true`.
+- `opencv_main` не принимал `--source` для проверки камеры.
+- Мелочи: устаревший комментарий про CONFLATE, `imgui.ini` не игнорировался.
+
+**Изменённые файлы**
+- `src/laptop/source_controller.cpp` (+тест `source_controller_test.cpp`)
+- `src/laptop/opencv_app.cpp`, `src/laptop/opencv_app.hpp`
+- `src/laptop/preview_support.cpp/.hpp` (+тест `preview_support_test.cpp`)
+- `src/laptop/opencv_main.cpp`
+- `src/laptop/pi_video_client.cpp`
+- `.gitignore`
+
+**Исправление / оптимизация**
+- `"local"` → `camera_index = 0`.
+- Статус Pi хранит JSON и время приёма; каждый кадр переоценивается, `stale` показывается честно.
+- `save_gate()` и `build_hsv_frame()` приведены к RGB-контракту.
+- Добавлен `preview_point_to_image()`; выделение маппится в кадр, пустое/внешнее выделение отклоняется.
+- Реализованы режимы L/A/B (RGB→Lab, выбор канала).
+- LAB-слайдеры интерактивны: клик меняет порог целевого ворота и сохраняет.
+- Добавлена проверка видимости главного окна → выход по X.
+- `opencv_main` принимает `--source <текст>` (и `--source=...`).
+- `imgui.ini` добавлен в `.gitignore`.
+
+**Проверка**
+```powershell
+$env:Path = 'C:\msys64\mingw64\bin;C:\msys64\usr\bin;' + $env:Path
+& 'C:\msys64\mingw64\bin\cmake.exe' -S . -B build-msys2
+& 'C:\msys64\mingw64\bin\cmake.exe' --build build-msys2
+& 'C:\msys64\mingw64\bin\ctest.exe' --test-dir build-msys2 --output-on-failure
+```
+Результат: сборка без предупреждений, `100% tests passed out of 35`, 15.56 sec; `preview_support`, `source_controller`, `opencv_app` — Passed. `[VERIFIED]`
+
+Живая камера ПК: `camera_ui.exe --source 0` открывает окно `Camera`, процесс остаётся живым, кадр 1280x720@30 → портрет 720x1280, `gates_found=0` (в комнате нет жёлтых ворот). `[VERIFIED ON LOCAL CAMERA]`
+Pi не подключался; всё, что касается Pi, остаётся `[UNVERIFIED ON HARDWARE]`.
+
+---
+
 ## OpenCV UI: перенос legacy-интерфейса на ПК
 
 **Причина / корневая проблема**

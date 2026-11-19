@@ -25,4 +25,5 @@ rpi_native_optimization_ed25519*
 .netrc
 known_hosts
 *.log
+imgui.ini
 secrets*

@@ -15,7 +15,7 @@ PiVideoClient::~PiVideoClient() {
     disconnect();
 }
 
-// Подключается к PUB на Pi; CONFLATE хранит только последний кадр.
+// Подключается к PUB на Pi; очередь дренируется в receive(), CONFLATE не используется.
 bool PiVideoClient::connect(std::string_view host, int port) {
     disconnect();
     context_ = zmq_ctx_new();

@@ -41,4 +41,19 @@ PreviewRect fit_rect(int window_w, int window_h, int image_w, int image_h) {
     return result;
 }
 
+bool preview_point_to_image(const PreviewRect& fitted, int rel_x, int rel_y,
+                            int image_w, int image_h, int& out_x, int& out_y) {
+    if (fitted.w <= 0 || fitted.h <= 0 || image_w <= 0 || image_h <= 0) return false;
+    const int local_x = rel_x - fitted.x;
+    const int local_y = rel_y - fitted.y;
+    if (local_x < 0 || local_y < 0 || local_x >= fitted.w || local_y >= fitted.h) return false;
+    out_x = static_cast<int>(std::lround(static_cast<double>(local_x) * image_w / fitted.w));
+    out_y = static_cast<int>(std::lround(static_cast<double>(local_y) * image_h / fitted.h));
+    if (out_x < 0) out_x = 0;
+    if (out_y < 0) out_y = 0;
+    if (out_x >= image_w) out_x = image_w - 1;
+    if (out_y >= image_h) out_y = image_h - 1;
+    return true;
+}
+
 } // namespace camera_cpp::laptop
