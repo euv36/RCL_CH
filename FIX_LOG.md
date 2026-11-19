@@ -218,3 +218,32 @@ $env:Path = 'C:\msys64\mingw64\bin;C:\msys64\usr\bin;' + $env:Path
 & 'C:\msys64\mingw64\bin\ctest.exe' --test-dir build-msys2 -R field_map --output-on-failure
 ```
 Результат: `field_map` Passed (1/1, 0.41 sec). `[VERIFIED]`
+
+---
+
+## Task 2 — Настройки камеры: канонические диапазоны и безопасные значения
+
+**Баг / корневая причина**
+- `CamSettingsConfig` дублировал диапазоны, принимал произвольные имена контролов, не сбрасывал `root_` при повторной загрузке и создавал null-записи через `operator[]`.
+- Нечисловые значения не заменялись безопасными legacy-значениями; `save()` не писал `version`/`ts` и сохранял числа с плавающей точкой.
+- Повторная загрузка повреждённого файла могла оставить устаревшие значения в памяти.
+
+**Изменённые файлы**
+- `src/common/cam_settings_config.cpp`
+- `tests/common/cam_settings_config_test.cpp`
+- `FIX_LOG.md`
+
+**Исправление / оптимизация**
+- Введена каноническая таблица из восьми UVC-контролов legacy-контракта; `set()` отклоняет неизвестные имена.
+- `load()` очищает состояние, подставляет безопасные значения 300/0/0/100/60/32/1/0, ограничивает и округляет числа до целых.
+- `get()` использует `find()` и не создаёт записи; неизвестные ключи верхнего уровня и контролов сохраняются.
+- `save()` пишет `version: 1`, локальную ISO-метку времени и целочисленные значения.
+
+**Проверка**
+```powershell
+$env:Path = 'C:\msys64\mingw64\bin;C:\msys64\usr\bin;' + $env:Path
+& 'C:\msys64\mingw64\bin\cmake.exe' -S . -B build-msys2
+& 'C:\msys64\mingw64\bin\cmake.exe' --build build-msys2
+& 'C:\msys64\mingw64\bin\ctest.exe' --test-dir build-msys2 -R cam_settings_config --output-on-failure
+```
+Результат: сначала тест упал на `!settings.set("unknown_control", 7)`; после исправления `cam_settings_config` Passed (1/1, 0.52 sec). `[VERIFIED]`
