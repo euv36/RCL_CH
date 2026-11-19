@@ -104,8 +104,9 @@ std::array<GateTrackResult, 3> TrackingEngine::track(const TrackInput& input) {
     times.cc_ms = elapsed_ms(cc_start, cc_end);
 
     const auto cluster_start = std::chrono::steady_clock::now();
-    const cv::Point2f frame_center(static_cast<float>(size.width - 1) * 0.5F,
-                                   static_cast<float>(size.height - 1) * 0.5F);
+    // Legacy oracle uses integer centers: cx0 = width // 2, cy0 = height // 2.
+    const cv::Point2f frame_center(static_cast<float>(size.width / 2),
+                                   static_cast<float>(size.height / 2));
     for (std::size_t slot = 0; slot < results.size(); ++slot) {
         if (!results[slot].enabled) {
             continue;
@@ -157,8 +158,17 @@ std::array<GateTrackResult, 3> TrackingEngine::track(const TrackInput& input) {
 
         auto& result = results[slot];
         result.found = true;
-        result.angle_deg = std::atan2(frame_center.y - object.cy, object.cx - frame_center.x) *
-                           (180.0F / static_cast<float>(kPi));
+        // Parity with legacy gate_cluster.angle_deg / pi_core::angle_from_center:
+        // 0 degrees right, CCW, wrapped into [0, 360). Python `% 360` and the
+        // C++ oracle both map negative atan2 results to the positive half circle;
+        // without the wrap gates below the center reported negative angles.
+        const float raw_angle = std::atan2(frame_center.y - object.cy,
+                                           object.cx - frame_center.x) *
+                                (180.0F / static_cast<float>(kPi));
+        float angle = std::fmod(raw_angle, 360.0F);
+        if (angle < 0.0F) angle += 360.0F;
+        if (angle >= 360.0F) angle -= 360.0F;
+        result.angle_deg = angle;
         result.radius_px = object.radius;
         result.bbox = (object.bbox.w > 0 && object.bbox.h > 0)
             ? cv::Rect(cvRound(object.bbox.x), cvRound(object.bbox.y), cvRound(object.bbox.w), cvRound(object.bbox.h))

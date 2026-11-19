@@ -69,13 +69,37 @@ int main() {
     CAMERA_TEST_CHECK(!results[1].enabled);
     CAMERA_TEST_CHECK(!results[2].enabled);
 
+    // Legacy oracle (gate_cluster.angle_deg / pi_core::angle_from_center):
+    // 0 deg = right, CCW, wrapped into [0, 360). In particular a gate below
+    // the frame center must report ~270 deg, never -90 deg.
+    const auto angle_for_gate_rect = [](cv::Rect rect) {
+        cv::Mat scene(720, 1280, CV_8UC3, cv::Scalar(25, 25, 30));
+        cv::rectangle(scene, rect, cv::Scalar(255, 255, 0), cv::FILLED);
+        TrackInput scene_input;
+        scene_input.portrait_rgb = &scene;
+        scene_input.thresholds[0] = threshold_for_rgb(cv::Vec3b(255, 255, 0));
+        const float angle = track_gates(scene_input)[0].angle_deg;
+        CAMERA_TEST_CHECK(angle >= 0.0F && angle < 360.0F);
+        return angle;
+    };
+    // Rectangles chosen so the connected-component centroid sits exactly on
+    // the legacy integer frame center (640, 360) in x for up/down and in y
+    // for left.
+    CAMERA_TEST_CHECK(std::abs(angle_for_gate_rect(cv::Rect(585, 46, 111, 150)) - 90.0F) < 1.5F);
+    CAMERA_TEST_CHECK(std::abs(angle_for_gate_rect(cv::Rect(265, 285, 111, 151)) - 180.0F) < 1.5F);
+    CAMERA_TEST_CHECK(std::abs(angle_for_gate_rect(cv::Rect(585, 525, 111, 150)) - 270.0F) < 1.5F);
+
     TrackingEngine engine;
     std::size_t previous_footprint = 0;
     for (int i = 0; i < 100; ++i) {
         auto cached = engine.track(input);
         CAMERA_TEST_CHECK(cached[0].enabled);
         const std::size_t footprint = engine.cache_footprint_bytes();
-        CAMERA_TEST_CHECK(footprint >= previous_footprint);
+        // Buffers are allocated on the first frame; all later frames must
+        // reuse them, so the cached footprint has to stay exactly constant.
+        if (i > 0) {
+            CAMERA_TEST_CHECK(footprint == previous_footprint);
+        }
         previous_footprint = footprint;
     }
     const auto timings = engine.last_stage_ms();
