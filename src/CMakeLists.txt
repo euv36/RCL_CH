@@ -88,6 +88,15 @@ add_library(camera_pi_zmq STATIC
 )
 target_link_libraries(camera_pi_zmq PUBLIC camera_pi_logic camera_common Threads::Threads ${ZMQ_LIBRARIES})
 target_include_directories(camera_pi_zmq PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/pi_camera ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/common ${PROJECT_SOURCE_DIR}/third_party ${ZMQ_INCLUDE_DIRS} ${ZMQ_INCLUDE_DIR})
+
+add_library(camera_laptop_publish STATIC laptop/gate_publisher.cpp)
+target_link_libraries(camera_laptop_publish PUBLIC camera_warnings camera_common ${ZMQ_LIBRARIES})
+target_include_directories(camera_laptop_publish PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
+  ${ZMQ_INCLUDE_DIRS} ${ZMQ_INCLUDE_DIR})
+
+add_executable(kCameraCppGatePublisherTest ../tests/laptop/gate_publisher_test.cpp)
+target_link_libraries(kCameraCppGatePublisherTest PRIVATE camera_laptop_publish)
+add_test(NAME gate_publisher COMMAND kCameraCppGatePublisherTest)
 endif()
 
 if(CAMERA_CPP_HAS_OPENCV AND CAMERA_CPP_HAS_ZMQ)
