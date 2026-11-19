@@ -94,6 +94,9 @@ private:
     cv::Mat cam_canvas_;
     cv::Mat help_canvas_;
     bool cam_window_initialized_ = false;
+    bool radar_window_created_ = false;
+    bool hsv_window_created_ = false;
+    bool help_window_created_ = false;
     int cam_view_w_ = 640;
     int cam_view_h_ = 480;
 

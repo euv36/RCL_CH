@@ -219,6 +219,15 @@ int find_button(const std::array<CvButton, N>& buttons, int x, int y) {
     return -1;
 }
 
+// Проверяет, существует ли окно и видно ли оно (false при закрытии крестиком).
+bool window_visible(const char* name) {
+    try {
+        return cv::getWindowProperty(name, cv::WND_PROP_VISIBLE) >= 1;
+    } catch (...) {
+        return false;
+    }
+}
+
 // Статический мост HighGUI → экземпляр приложения.
 void on_mouse(int event, int x, int y, int flags, void* userdata) {
     auto* app = static_cast<OpenCVApp*>(userdata);
@@ -605,6 +614,7 @@ cv::Mat OpenCVApp::build_radar_frame() const {
 void OpenCVApp::render_radar() {
     radar_canvas_ = build_radar_frame();
     cv::imshow(kRadarWindow, radar_canvas_);
+    radar_window_created_ = true;
 }
 
 cv::Mat OpenCVApp::build_hsv_frame() const {
@@ -633,6 +643,7 @@ cv::Mat OpenCVApp::build_hsv_frame() const {
 void OpenCVApp::render_hsv() {
     hsv_frame_ = build_hsv_frame();
     cv::imshow(kHsvWindow, hsv_frame_);
+    hsv_window_created_ = true;
 }
 
 void OpenCVApp::render_cam_settings() {
@@ -700,6 +711,7 @@ void OpenCVApp::render_help() {
     help_canvas_ = build_help_frame();
     cv::imshow(kHelpWindow, help_canvas_);
     cv::setMouseCallback(kHelpWindow, on_help_mouse, this);
+    help_window_created_ = true;
 }
 
 void OpenCVApp::handle_key(int key) {
@@ -1019,19 +1031,69 @@ int OpenCVApp::run() {
             send_cam_settings();
         }
         render_main();
-        if (state_.show_radar) render_radar();
-        else cv::destroyWindow(kRadarWindow);
-        if (state_.show_hsv && !portrait_frame_.empty()) render_hsv();
-        else cv::destroyWindow(kHsvWindow);
-        if (state_.show_cam_settings) render_cam_settings();
-        else {
-            cv::destroyWindow(kCamWindow);
-            cam_window_initialized_ = false;
+        if (state_.show_radar) {
+            if (radar_window_created_ && !window_visible(kRadarWindow)) {
+                state_.show_radar = false;
+                radar_window_created_ = false;
+                try { cv::destroyWindow(kRadarWindow); } catch (...) {}
+            } else {
+                render_radar();
+            }
+        } else {
+            if (radar_window_created_) {
+                try { cv::destroyWindow(kRadarWindow); } catch (...) {}
+                radar_window_created_ = false;
+            }
         }
-        if (state_.show_help) render_help();
-        else cv::destroyWindow(kHelpWindow);
+        if (state_.show_hsv && !portrait_frame_.empty()) {
+            if (hsv_window_created_ && !window_visible(kHsvWindow)) {
+                state_.show_hsv = false;
+                hsv_window_created_ = false;
+                try { cv::destroyWindow(kHsvWindow); } catch (...) {}
+            } else {
+                render_hsv();
+            }
+        } else {
+            if (hsv_window_created_) {
+                try { cv::destroyWindow(kHsvWindow); } catch (...) {}
+                hsv_window_created_ = false;
+            }
+        }
+        if (state_.show_cam_settings) {
+            if (cam_window_initialized_ && !window_visible(kCamWindow)) {
+                state_.show_cam_settings = false;
+                cam_window_initialized_ = false;
+                try { cv::destroyWindow(kCamWindow); } catch (...) {}
+            } else {
+                render_cam_settings();
+            }
+        } else {
+            if (cam_window_initialized_) {
+                try { cv::destroyWindow(kCamWindow); } catch (...) {}
+                cam_window_initialized_ = false;
+            }
+        }
+        if (state_.show_help) {
+            if (help_window_created_ && !window_visible(kHelpWindow)) {
+                state_.show_help = false;
+                help_window_created_ = false;
+                try { cv::destroyWindow(kHelpWindow); } catch (...) {}
+            } else {
+                render_help();
+            }
+        } else {
+            if (help_window_created_) {
+                try { cv::destroyWindow(kHelpWindow); } catch (...) {}
+                help_window_created_ = false;
+            }
+        }
 
-        if (cv::getWindowProperty(kMainWindow, cv::WND_PROP_VISIBLE) < 1) {
+        try {
+            if (cv::getWindowProperty(kMainWindow, cv::WND_PROP_VISIBLE) < 1) {
+                quit_requested_ = true;
+                break;
+            }
+        } catch (...) {
             quit_requested_ = true;
             break;
         }
