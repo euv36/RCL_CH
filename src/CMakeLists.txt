@@ -173,6 +173,14 @@ add_executable(kCameraCppHelpRuTest ../tests/laptop/help_ru_test.cpp)
 target_link_libraries(kCameraCppHelpRuTest PRIVATE camera_laptop_core)
 add_test(NAME help_ru COMMAND kCameraCppHelpRuTest)
 
+add_library(camera_laptop_status STATIC laptop/status_panel_client.cpp)
+target_link_libraries(camera_laptop_status PUBLIC camera_warnings camera_common)
+target_include_directories(camera_laptop_status PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
+add_executable(kCameraCppStatusPanelClientTest ../tests/laptop/status_panel_client_test.cpp)
+target_link_libraries(kCameraCppStatusPanelClientTest PRIVATE camera_laptop_status)
+add_test(NAME status_panel_client COMMAND kCameraCppStatusPanelClientTest)
+
 if(CAMERA_CPP_HAS_OPENCV)
 add_library(camera_laptop_hsv STATIC laptop/hsv_panel.cpp)
 target_link_libraries(camera_laptop_hsv PUBLIC camera_laptop_core ${OpenCV_LIBS})
