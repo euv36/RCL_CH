@@ -15,5 +15,10 @@ add_subdirectory(src)
 
 add_executable(kCameraCppLaptopDependencyGateTest tests/laptop/dependency_gate_test.cpp)
 target_link_libraries(kCameraCppLaptopDependencyGateTest PRIVATE camera_warnings)
-target_compile_definitions(kCameraCppLaptopDependencyGateTest PRIVATE CAMERA_CPP_HAS_LAPTOP_DEPS=${CAMERA_CPP_LAPTOP_DEPS_VALUE})
+target_compile_definitions(kCameraCppLaptopDependencyGateTest PRIVATE
+  CAMERA_CPP_HAS_LAPTOP_DEPS=${CAMERA_CPP_LAPTOP_DEPS_VALUE}
+  CAMERA_CPP_HAS_VENDORED_IMGUI=${CAMERA_CPP_HAS_VENDORED_IMGUI})
+if(CAMERA_CPP_HAS_LAPTOP_DEPS AND TARGET camera_imgui)
+  target_link_libraries(kCameraCppLaptopDependencyGateTest PRIVATE camera_imgui)
+endif()
 add_test(NAME laptop_dependency_gate COMMAND kCameraCppLaptopDependencyGateTest)

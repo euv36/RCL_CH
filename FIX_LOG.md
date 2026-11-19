@@ -36,3 +36,34 @@ $env:Path = 'C:\msys64\mingw64\bin;C:\msys64\usr\bin;' + $env:Path
 & 'C:\msys64\mingw64\bin\ctest.exe' --test-dir build-msys2 --output-on-failure -R 'atomic_file|json_config'
 ```
 Result: `atomic_file` Passed, `json_config` Passed (2/2).
+
+---
+
+## Task 4 — Vendored Dear ImGui and laptop dependency gate
+
+**Bug / root cause**
+- The laptop UI required an external `imgui` package that MSYS2 does not provide, so the target could never be built on this machine.
+- The dependency gate checked only for `imgui.h` and did not build a reusable ImGui library or verify its version.
+
+**Modified files**
+- `third_party/imgui/*` (vendored Dear ImGui v1.91.8 + SDL2/OpenGL3 backends)
+- `third_party/THIRD_PARTY.md`
+- `cmake/LaptopDependencies.cmake`
+- `CMakeLists.txt`
+- `tests/laptop/dependency_gate_test.cpp`
+
+**Fix / optimization**
+- Vendored Dear ImGui v1.91.8 with its MIT license, upstream URL and archive SHA-256 recorded.
+- Added the `camera_imgui` static target, compiled once and linked to SDL2/OpenGL.
+- Gate now accepts either imported CMake targets or library variables.
+- The dependency-gate test includes `imgui.h` and asserts `IMGUI_VERSION_NUM >= 19180` when laptop dependencies are present.
+- No ImGui binary is committed; only source.
+
+**Verification**
+```powershell
+$env:Path = 'C:\msys64\mingw64\bin;C:\msys64\usr\bin;' + $env:Path
+& 'C:\msys64\mingw64\bin\cmake.exe' -S . -B build-msys2
+& 'C:\msys64\mingw64\bin\cmake.exe' --build build-msys2
+& 'C:\msys64\mingw64\bin\ctest.exe' --test-dir build-msys2 --output-on-failure
+```
+Result: `laptop_dependency_gate` Passed; full suite 17/17 Passed. `[VERIFIED]`
