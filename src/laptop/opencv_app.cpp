@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <cstdint>
 #include <filesystem>
 #include <sstream>
@@ -155,8 +156,8 @@ std::array<CvSlider, 6> bottom_sliders() {
 }
 
 // Кнопки сохранения ворот внизу окна.
-std::array<CvButton, 4> bottom_buttons() {
-    std::array<CvButton, 4> buttons{};
+std::array<CvButton, 5> bottom_buttons() {
+    std::array<CvButton, 5> buttons{};
     buttons[0].rect = {30, 610, 130, 32};
     buttons[0].label = "TARGET G1";
     buttons[1].rect = {170, 610, 100, 32};
@@ -165,6 +166,8 @@ std::array<CvButton, 4> bottom_buttons() {
     buttons[2].label = "SAVE G2";
     buttons[3].rect = {390, 610, 100, 32};
     buttons[3].label = "SAVE G3";
+    buttons[4].rect = {500, 610, 120, 32};
+    buttons[4].label = "RESET THR";
     return buttons;
 }
 
@@ -540,10 +543,24 @@ void OpenCVApp::render_main() {
 
     auto bottom = bottom_buttons();
     if (!bottom.empty()) bottom[0].label = "TARGET G" + std::to_string(target_gate_);
-    for (const auto& button : bottom) button.draw(canvas_, false);
+    if (bottom.size() >= 5) bottom[4].label = reset_pending_ ? "CONFIRM?" : "RESET THR";
+    for (std::size_t i = 0; i < bottom.size(); ++i) {
+        bottom[i].draw(canvas_, reset_pending_ && i == 4);
+    }
 
-    const auto sliders = bottom_sliders();
+    auto sliders = bottom_sliders();
+    const auto gate_record = gate_store_.gate(static_cast<GateId>(target_gate_));
+    GateLab gate_lab = gate_record && gate_record->lab ? *gate_record->lab
+        : GateLab{50, 90, -20, 20, -20, 20};
+    for (std::size_t i = 0; i < sliders.size(); ++i) {
+        sliders[i].value = gate_lab[i];
+    }
     for (const auto& slider : sliders) slider.draw(canvas_);
+
+    char fps_text[64];
+    std::snprintf(fps_text, sizeof(fps_text), "FPS %.1f", state_.fps_ui);
+    cv::putText(canvas_, fps_text, {kWindowW - 110, 30}, cv::FONT_HERSHEY_SIMPLEX,
+                0.6, cv::Scalar(120, 220, 255), 1, cv::LINE_AA);
 
     cv::imshow(kMainWindow, canvas_);
 }
@@ -781,6 +798,28 @@ void OpenCVApp::handle_mouse(int event, int x, int y, int flags) {
         if (!bottom[i].rect.contains(x, y) || event != cv::EVENT_LBUTTONDOWN) continue;
         if (i == 0) {
             target_gate_ = target_gate_ % 3 + 1;
+        } else if (i == 4) {
+            const auto now = clock::now();
+            if (reset_pending_ &&
+                std::chrono::duration<double>(now - reset_pending_time_).count() < 3.0) {
+                const int slot = target_gate_;
+                GateLab lab{50, 90, -20, 20, -20, 20};
+                const auto roles = gate_store_.roles();
+                gate_store_.upsert(static_cast<GateId>(slot),
+                                   {state_.gate_colors[slot - 1][0],
+                                    state_.gate_colors[slot - 1][1],
+                                    state_.gate_colors[slot - 1][2]},
+                                   roles[slot - 1], lab);
+                gate_store_.save_atomic();
+                colors_dirty_ = true;
+                state_.gate_save_status = "G" + std::to_string(slot) + " thresholds reset";
+                log_.push(state_.gate_save_status);
+                reset_pending_ = false;
+            } else {
+                reset_pending_ = true;
+                reset_pending_time_ = now;
+                log_.push("Press RESET again within 3s to confirm");
+            }
         } else {
             save_gate(i);
         }
@@ -958,7 +997,22 @@ int OpenCVApp::run() {
             status_ = parse_status_payload(status_json_, status_received_at_, clock::now());
             apply_status(status_);
         }
-        if (!frame.empty() && !state_.paused) process_frame(frame);
+        if (reset_pending_ &&
+            std::chrono::duration<double>(clock::now() - reset_pending_time_).count() > 3.0) {
+            reset_pending_ = false;
+            log_.push("RESET cancelled");
+        }
+        if (!frame.empty() && !state_.paused) {
+            process_frame(frame);
+            ++fps_frame_count_;
+            const auto now = clock::now();
+            const double elapsed = std::chrono::duration<double>(now - fps_last_time_).count();
+            if (elapsed >= 0.5) {
+                state_.fps_ui = static_cast<double>(fps_frame_count_) / elapsed;
+                fps_frame_count_ = 0;
+                fps_last_time_ = now;
+            }
+        }
         publish_colors();
         if (state_.show_cam_settings &&
             clock::now() - last_cam_send_ >= std::chrono::seconds(5)) {

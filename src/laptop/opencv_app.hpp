@@ -114,12 +114,16 @@ private:
         std::chrono::steady_clock::now();
 
     int frames_processed_ = 0;
+    int fps_frame_count_ = 0;
+    std::chrono::steady_clock::time_point fps_last_time_ = std::chrono::steady_clock::now();
     int selected_threshold_slot_ = 0;
     int target_gate_ = 1;
     int help_tab_ = 0;
     bool quit_requested_ = false;
     bool need_connect_ = false;
     bool colors_dirty_ = true;
+    bool reset_pending_ = false;
+    std::chrono::steady_clock::time_point reset_pending_time_{};
     std::chrono::steady_clock::time_point last_color_send_{};
     std::chrono::steady_clock::time_point last_cam_send_{};
 };
