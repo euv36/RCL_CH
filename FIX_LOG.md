@@ -539,3 +539,41 @@ $env:Path = 'C:\msys64\mingw64\bin;' + $env:Path
 Результат index 0 (`HP HD Camera`): `negotiated=1280x720 fps=30`, 30/30 кадров, 31.3 fps, stage cvt=3.67 mask=1.12 cc=5.48 cluster=0.00 total=10.27 ms, processing=640x360 portrait=720x1280, gates_found=0. Результат index 1 (`HD USB Camera`): `negotiated=1920x1080 fps=30`, 30/30 кадров, 4.79 fps (ограничение USB/железа, не кода), stage total=8.71 ms, gates_found=0. Оба выхода 0. Жёлтых ворот в комнате нет, поэтому `gates_found=0` ожидаемо. `[VERIFIED ON LOCAL CAMERA]`
 
 Все утверждения про Pi, live-камеру и прошивку остаются `[UNVERIFIED ON HARDWARE]`: Pi не подключался, SSH/сетевые пробы не выполнялись. Сон ноутбука не выполнялся.
+
+---
+
+## Локальный предпросмотр камеры ПК в окне
+
+**Баг / корневая причина**
+- Существующий `local_camera_probe` печатал метрики в консоль, но не показывал саму картинку, поэтому «посмотреть, как работает камера» было нельзя.
+- В `cmd.exe` синтаксис `$env:Path = ...` из инструкций PowerShell не работает: пользователь получил `The filename, directory name, or volume label syntax is incorrect.`
+
+**Изменённые файлы**
+- `src/laptop/preview_support.hpp/.cpp` (новые)
+- `tests/laptop/preview_support_test.cpp` (новый)
+- `tools/local_camera_preview.cpp` (новый)
+- `src/CMakeLists.txt`
+- `FIX_LOG.md`
+
+**Исправление / оптимизация**
+- Выделены тестируемые функции `bgr_to_rgba()` (BGR → плотный RGBA для SDL) и `fit_rect()` (вписывание кадра в окно без обрезки FOV).
+- Добавлен `local_camera_preview`: SDL2-окно с живым потоком локальной USB-камеры, найденные ворота обводятся жёлтым прямоугольником, в консоль каждые 30 кадров пишутся FPS и время трекинга. Pi/ZMQ/сеть не используются.
+- TDD: тест `preview_support` сначала RED (нет заголовка/реализации), затем GREEN.
+
+**Проверка**
+```powershell
+$env:Path = 'C:\msys64\mingw64\bin;C:\msys64\usr\bin;' + $env:Path
+& 'C:\msys64\mingw64\bin\cmake.exe' -S . -B build-msys2
+& 'C:\msys64\mingw64\bin\cmake.exe' --build build-msys2
+& 'C:\msys64\mingw64\bin\ctest.exe' --test-dir build-msys2 --output-on-failure
+```
+Результат: сборка без предупреждений, `100% tests passed out of 29`, 13.88 sec; `preview_support` Passed. `[VERIFIED]`
+
+Окно запущено на ПК: `Start-Process .\build-msys2\src\local_camera_preview.exe --index 0`, процесс жив, `MainWindowTitle = Local camera preview`. `[VERIFIED ON LOCAL CAMERA]`
+
+Для `cmd.exe` эквивалент строки PATH:
+```cmd
+set "PATH=C:\msys64\mingw64\bin;%PATH%"
+build-msys2\src\local_camera_preview.exe --index 0
+```
+Закрытие окна — `ESC` или кнопка `X`. Pi/live по-прежнему `[UNVERIFIED ON HARDWARE]`.

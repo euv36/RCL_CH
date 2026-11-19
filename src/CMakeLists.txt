@@ -54,6 +54,12 @@ add_test(NAME downscale_reuse COMMAND kCameraCppDownscaleReuseTest)
 # потому что требует реального USB-устройства и не должна падать в CI без него.
 add_executable(local_camera_probe ../tools/local_camera_probe.cpp)
 target_link_libraries(local_camera_probe PRIVATE camera_pi_camera)
+
+if(CAMERA_CPP_HAS_LAPTOP_DEPS)
+add_executable(local_camera_preview ../tools/local_camera_preview.cpp)
+target_link_libraries(local_camera_preview PRIVATE camera_pi_camera camera_laptop_preview ${_camera_cpp_sdl2_target})
+target_include_directories(local_camera_preview PRIVATE ${SDL2_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR})
+endif()
 endif()
 
 add_library(camera_pi_logic STATIC
@@ -170,6 +176,14 @@ target_include_directories(camera_laptop_hsv PUBLIC ${OpenCV_INCLUDE_DIRS})
 add_executable(kCameraCppHsvPanelTest ../tests/laptop/hsv_panel_test.cpp)
 target_link_libraries(kCameraCppHsvPanelTest PRIVATE camera_laptop_hsv)
 add_test(NAME hsv_panel COMMAND kCameraCppHsvPanelTest)
+
+add_library(camera_laptop_preview STATIC laptop/preview_support.cpp)
+target_link_libraries(camera_laptop_preview PUBLIC camera_laptop_core ${OpenCV_LIBS})
+target_include_directories(camera_laptop_preview PUBLIC ${OpenCV_INCLUDE_DIRS})
+
+add_executable(kCameraCppPreviewSupportTest ../tests/laptop/preview_support_test.cpp)
+target_link_libraries(kCameraCppPreviewSupportTest PRIVATE camera_laptop_preview)
+add_test(NAME preview_support COMMAND kCameraCppPreviewSupportTest)
 endif()
 
 add_executable(kCameraCppLayoutSmokeTest ../tests/laptop/layout_smoke_test.cpp)
