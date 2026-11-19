@@ -10,6 +10,11 @@ namespace {
 
 struct Range { int low; int high; };
 
+// Local mirror of the canonical eight-control table in
+// src/common/cam_settings_config.cpp (owned by another task, not edited here).
+// The eight bounds below must stay identical to kControls there. auto_exposure
+// is deliberately not a user control: it is forced to manual separately, and
+// this extra row only clamps any incoming value to 1.
 const std::unordered_map<std::string, Range>& ranges() {
     static const std::unordered_map<std::string, Range> table = {
         {"exposure", {1, 5000}},
@@ -44,7 +49,9 @@ std::string quote_value(int value) {
 
 bool ApplyReport::ok() const {
     for (const auto& [_, item] : controls) {
-        if (item.status == "error" || item.status == "mismatch") {
+        // "unconfirmed" is not success: set worked, but the camera never gave
+        // us a usable readback to verify it.
+        if (item.status == "error" || item.status == "mismatch" || item.status == "unconfirmed") {
             return false;
         }
     }
@@ -75,7 +82,9 @@ ApplyReport CamSettings::apply_controls(const std::string& device, const std::un
         if (get.exit_code == 0 && parse_readback(get.out, readback)) {
             report.controls.emplace(name, ControlResult{value, readback == applied ? "ok" : "mismatch"});
         } else {
-            report.controls.emplace(name, ControlResult{value, "ok"});
+            // Set succeeded, but verification did not: a failed or unparsable
+            // readback must never be reported as an acknowledged "ok".
+            report.controls.emplace(name, ControlResult{value, "unconfirmed"});
         }
     };
 

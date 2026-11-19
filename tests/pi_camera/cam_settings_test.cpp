@@ -38,18 +38,28 @@ int main() {
         fake->results["v4l2-ctl --device=" + device + " --get-ctrl=" + control] = {0, readback, ""};
     }
     fake->results["v4l2-ctl --device=" + device + " --get-ctrl=brightness"] = {0, "brightness: -64", ""};
+    // Unparsable readback and a failed get must not become an invented "ok".
+    fake->results["v4l2-ctl --device=" + device + " --get-ctrl=gamma"] = {0, "gamma: ?", ""};
+    fake->results["v4l2-ctl --device=" + device + " --get-ctrl=contrast"] = {1, "", "read failed"};
 
     CamSettings settings(fake);
     const auto report = settings.apply_controls(device, {
         {"exposure", 999999},
         {"brightness", 1000},
+        {"gamma", 100},
+        {"contrast", 32},
         {"unknown_control", 7},
     });
 
     CAMERA_TEST_CHECK(report.controls.at("exposure").requested == "5000");
     CAMERA_TEST_CHECK(report.controls.at("exposure").status == "ok");
     CAMERA_TEST_CHECK(report.controls.at("brightness").status == "mismatch");
+    CAMERA_TEST_CHECK(report.controls.at("gamma").status == "unconfirmed");
+    CAMERA_TEST_CHECK(report.controls.at("contrast").status == "unconfirmed");
+    CAMERA_TEST_CHECK(report.controls.at("auto_exposure").requested == "1");
+    CAMERA_TEST_CHECK(report.controls.at("auto_exposure").status == "ok");
     CAMERA_TEST_CHECK(report.controls.at("unknown_control").status == "n/a");
+    CAMERA_TEST_CHECK(!report.ok());
     CAMERA_TEST_CHECK(!fake->calls.empty());
 
     return 0;
