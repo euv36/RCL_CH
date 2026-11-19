@@ -75,6 +75,12 @@ if(CAMERA_CPP_HAS_OPENCV AND CAMERA_CPP_HAS_ZMQ)
 add_executable(camera_service pi_camera/service_main.cpp)
 target_link_libraries(camera_service PRIVATE camera_pi_camera camera_pi_zmq camera_pi_logic camera_common Threads::Threads ${OpenCV_LIBS} ${ZMQ_LIBRARIES})
 target_include_directories(camera_service PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/common ${CMAKE_CURRENT_SOURCE_DIR}/pi_camera ${PROJECT_SOURCE_DIR}/third_party ${OpenCV_INCLUDE_DIRS} ${ZMQ_INCLUDE_DIRS} ${ZMQ_INCLUDE_DIR})
+
+add_executable(kCameraCppPiZmqLoopbackTest ../tests/integration/pi_zmq_loopback_test.cpp)
+target_link_libraries(kCameraCppPiZmqLoopbackTest PRIVATE camera_common Threads::Threads ${ZMQ_LIBRARIES})
+target_include_directories(kCameraCppPiZmqLoopbackTest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/common ${PROJECT_SOURCE_DIR}/third_party ${ZMQ_INCLUDE_DIRS} ${ZMQ_INCLUDE_DIR})
+target_compile_definitions(kCameraCppPiZmqLoopbackTest PRIVATE CAMERA_SERVICE_PATH="$<TARGET_FILE:camera_service>")
+add_test(NAME pi_zmq_loopback COMMAND kCameraCppPiZmqLoopbackTest)
 endif()
 
 add_executable(kCameraCppGateStoreTest ../tests/common/gate_store_test.cpp)

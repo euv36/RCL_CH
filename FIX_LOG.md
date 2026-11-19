@@ -367,3 +367,47 @@ $env:Path = 'C:\msys64\mingw64\bin;C:\msys64\usr\bin;' + $env:Path
 & 'C:\msys64\mingw64\bin\ctest.exe' --test-dir build-msys2 -R capture --output-on-failure
 ```
 Результат: configure OK, build OK, `capture_config` Passed (1/1, 0.22 sec). Полная сборка готовилась параллельно с незавершённым Task 11, поэтому финальный полный прогон после завершения Task 11 обязателен. `[VERIFIED TARGETED]`
+
+---
+
+## Task 11 — Сервис Pi: конфигурированные ворота, честный статус и ZMQ-слушатели
+
+**Баг / корневая причина**
+- `TrackInput.thresholds` оставался по умолчанию (`configured=false`), поэтому `TrackingEngine` пропускал все сохранённые ворота: сервис работал, но не обнаруживал ни одни настроенные ворота.
+- Единицы LAB не совпадали: `GateStore` хранит legacy LAB (L 0..100, a/b −128..127), а `GateThreshold` ожидает 8-битный OpenCV Lab (L 0..255, a/b 0..255 с нейтралью 128).
+- `GateStore` менялся потоком `ColorListener` без блокировки, пока главный цикл читал его: гонка данных.
+- Парсер цвета игнорировал `lab` и верхнеуровневый `rgb`, не проверял id и диапазоны; `role` терялся.
+- Статус был неправдивым: `enabled` мог быть true при `found/held=false`, `held` всегда false, углы приходили в −180..180, `fps` мог быть нечисловым, площадь и роль не публиковались.
+- SUB-сокеты не имели `ZMQ_RCVHWM=1` и дренажа очереди; CAM SET приводил нечисловые значения к нулю и применял их; legacy-имя `exposure_time_absolute` не отображалось.
+- Порты были захардкожены, флаги `--laptop-ip`/`--no-serial` нигде не отражались; сервис печатал «camera open: 1920x1080 MJPG @30», не проверив согласованные параметры.
+
+**Изменённые файлы**
+- `src/pi_camera/service_main.cpp`
+- `src/pi_camera/color_listener.hpp`
+- `src/pi_camera/color_listener.cpp`
+- `src/pi_camera/status_builder.hpp`
+- `src/pi_camera/status_builder.cpp`
+- `src/CMakeLists.txt`
+- `tests/pi_camera/status_builder_test.cpp`
+- `tests/integration/pi_zmq_loopback_test.cpp` (новый)
+- `FIX_LOG.md`
+
+**Исправление / оптимизация**
+- Перед каждым кадром под общей mutex-блокировкой делается снимок `GateStore`; все три слота заполняются порогами из Lab, а при отсутствии Lab — широким окном из RGB. Блокировка не удерживается во время трекинга.
+- Legacy LAB переводится в OpenCV 8-bit: `L8=round(L*255/100)`, `A8/B8=round(v+128)`, кламп 0..255 и сохранение `min<=max`.
+- Общий `std::mutex` защищает `GateStore` между слушателем и главным циклом.
+- `ColorListener` принимает `{gates:[…]}`, массив и верхнеуровневый `rgb`, проверяет id 1..3 и диапазоны, сохраняет `role`.
+- `StatusBuilder` подавляет `found/held/area/dist` для выключенных ворот, нормализует угол в `[0,360)`, обнуляет нечисловой fps, публикует `area`/`area_px`, `role`, `dist_reliable`; `held` берётся из результата трекинга.
+- SUB: `ZMQ_RCVHWM=1`, дренаж очереди с оставлением только последнего полного сообщения, `RCVTIMEO=100`, `LINGER=0`, без `ZMQ_CONFLATE`.
+- CAM SET: нечисловые значения отбрасываются; `exposure_time_absolute` отображается в `exposure` с правдивым логом; подтверждение не выдумывается.
+- Добавлены `--port-colors`, `--cam-settings-port`, `--bind-host`; `--laptop-ip` и `--no-serial` честно логируются. Сервис печатает согласованные предупреждения `CaptureOpenReport`, а запрашиваемый режим больше не выдаётся за согласованный.
+- Loopback-тест на `127.0.0.1:15555/15557/15559` с fake V4L2 проверяет multipart `[JPEG, JSON]`, преобразование LAB, применение CAM SET и отсутствие выдуманного ack. Реальное железо не использовалось: `[UNVERIFIED ON HARDWARE]`.
+
+**Проверка**
+```powershell
+$env:Path = 'C:\msys64\mingw64\bin;C:\msys64\usr\bin;' + $env:Path
+& 'C:\msys64\mingw64\bin\cmake.exe' -S . -B build-msys2
+& 'C:\msys64\mingw64\bin\cmake.exe' --build build-msys2
+& 'C:\msys64\mingw64\bin\ctest.exe' --test-dir build-msys2 --output-on-failure
+```
+Результат: configure OK, сборка 100%, `100% tests passed out of 19`, 13.23 sec; `pi_zmq_loopback` Passed (10.61 sec), `status_builder` Passed. `[VERIFIED]`

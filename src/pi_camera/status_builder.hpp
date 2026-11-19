@@ -17,6 +17,8 @@ struct GateStatus {
     float dist_cm = 0.0F;
     bool dist_reliable = true;
     bool held = false;
+    float area_px = 0.0F;
+    std::string role = "unset";
 };
 
 class StatusBuilder {
